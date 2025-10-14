@@ -282,10 +282,11 @@ find . -name "__pycache__" -type d -exec rm -rf {} +
 find . -name "*.pyc" -delete
 
 # Remove database (optional - contains your scan data)
-rm -f fou4.db
+rm -f ~/.local/share/fou4/fou4.db  # Linux/macOS default path
+# PowerShell (run separately): Remove-Item "$env:APPDATA\FOU4\fou4.db"
 ```
 
-**Note**: Your scan database (`fou4.db`) is preserved by default.
+**Note**: Your scan database is stored per-user (Linux/macOS: `~/.local/share/fou4/fou4.db`, Windows: `%APPDATA%\\FOU4\\fou4.db`). Set `FOU4_DB_PATH` to use a custom location.
 
 ---
 

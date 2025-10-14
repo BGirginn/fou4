@@ -2887,7 +2887,7 @@ Duration: 15 seconds├── EXAMPLES.md            # Usage examples
 
 ```├── LICENSE                # MIT License
 
-├── fou4.db                # SQLite database (created on first run)
+> Database files are stored per-user (Linux/macOS: ~/.local/share/fou4/fou4.db, Windows: %APPDATA%\FOU4\fou4.db). Use `FOU4_DB_PATH` to override.
 
 **Features**:├── modules/               # Functional modules
 

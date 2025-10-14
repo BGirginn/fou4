@@ -25,7 +25,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 echo -e "${YELLOW}This will remove FOU4 from your system.${NC}"
-echo -e "${YELLOW}Your scan data (fou4.db) will be preserved.${NC}\n"
+echo -e "${YELLOW}Your scan data (defaults: ~/.local/share/fou4/fou4.db or %APPDATA%\\FOU4\\fou4.db) will be preserved.${NC}\n"
 
 read -p "Continue? (y/N): " -n 1 -r
 echo
@@ -65,7 +65,7 @@ echo -e "${GREEN}  Uninstallation Complete!${NC}"
 echo -e "${GREEN}═══════════════════════════════════════${NC}\n"
 
 echo -e "${BLUE}Notes:${NC}"
-echo -e "  → Database (fou4.db) preserved"
+echo -e "  → Database (defaults: ~/.local/share/fou4/fou4.db or %APPDATA%\\FOU4\\fou4.db) preserved"
 echo -e "  → Source files preserved"
 echo -e "  → Security tools not removed\n"
 

@@ -8,6 +8,7 @@ import sqlite3
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -15,8 +16,48 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.console import console, print_success, print_error, print_warning, print_info
 
 
-# Database file path (in the project root)
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'fou4.db')
+def _resolve_db_path():
+    """Return the absolute path to the SQLite database file.
+
+    The original implementation stored the database alongside the source
+    code which works when running from a git checkout, but it fails once
+    the project is installed as a package because the install location is
+    typically read-only.  This helper places the database inside an OS
+    appropriate user data directory and still honours the ``FOU4_DB_PATH``
+    environment variable for advanced users.
+    """
+
+    override = os.environ.get("FOU4_DB_PATH")
+    if override:
+        candidate = Path(os.path.expanduser(override)).resolve()
+        directory = candidate.parent
+        directory.mkdir(parents=True, exist_ok=True)
+        return str(candidate)
+
+    if sys.platform.startswith("win"):
+        base_dir = os.environ.get("APPDATA")
+        if not base_dir:
+            base_dir = Path.home() / "AppData" / "Roaming"
+        data_dir = Path(base_dir) / "FOU4"
+    else:
+        xdg_dir = os.environ.get("XDG_DATA_HOME")
+        if xdg_dir:
+            data_dir = Path(os.path.expanduser(xdg_dir)) / "fou4"
+        else:
+            data_dir = Path.home() / ".local" / "share" / "fou4"
+
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return str((data_dir / "fou4.db").resolve())
+
+
+# Database file path (stored in a writable per-user directory by default)
+DB_PATH = _resolve_db_path()
+
+
+def get_database_path():
+    """Return the path to the SQLite database used by FOU4."""
+
+    return DB_PATH
 
 
 def get_connection():
