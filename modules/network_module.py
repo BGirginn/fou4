@@ -589,3 +589,34 @@ def packet_sniff(interface: str, duration: int = 30, filter_exp: Optional[str] =
         print_error(f"Error during packet capture: {str(e)}")
         return False
 
+
+# Interactive Mode Handler
+from rich.prompt import Prompt
+from utils.ui import print_network_menu, clear_screen
+
+def run_network_module():
+    """
+    Main function for the Network module in interactive mode.
+    """
+    if not check_network_tools(): return
+
+    while True:
+        clear_screen()
+        print_network_menu()
+        choice = Prompt.ask("\n[cyan]Select option[/cyan]", choices=["0", "1", "2", "3", "4", "5"], default="0")
+        if choice == "0": break
+
+        target = Prompt.ask("[cyan]Enter target IP or hostname[/cyan]")
+        if not target: continue
+
+        if choice == "1": port_scan(target)
+        elif choice == "2": service_detection(target)
+        elif choice == "3": network_mapping(target)
+        elif choice == "4": run_vulnerability_scan(target)
+        elif choice == "5": 
+            interface = Prompt.ask("[cyan]Enter interface to sniff on (e.g., eth0)[/cyan]")
+            duration = int(Prompt.ask("Enter capture duration (seconds)", default="60"))
+            packet_sniff(interface, duration)
+
+        input("\nPress Enter to continue...")
+

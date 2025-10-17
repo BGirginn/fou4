@@ -416,3 +416,31 @@ def test_authentication(target_url: str, username_list: Optional[str] = None, pa
         print_error(f"Error during authentication test: {str(e)}")
         return None
 
+
+from rich.prompt import Prompt
+from utils.ui import print_web_menu, clear_screen
+
+def run_web_module():
+    """
+    Main function for the Web module in interactive mode.
+    """
+    if not check_web_tools(): return
+
+    while True:
+        clear_screen()
+        print_web_menu()
+        choice = Prompt.ask("\n[cyan]Select option[/cyan]", choices=["0", "1", "2", "3", "4", "5"], default="0")
+        if choice == "0": break
+
+        target_url = Prompt.ask("[cyan]Enter target URL (e.g., http://example.com)[/cyan]")
+        if not target_url: continue
+
+        if choice == "1": directory_enumeration(target_url)
+        elif choice == "2": sql_injection_test(target_url)
+        elif choice == "3": nikto_scan(target_url) # Nikto can detect XSS
+        elif choice == "4": test_authentication(target_url)
+        else:
+            print_warning("This feature is not yet implemented.")
+
+        input("\nPress Enter to continue...")
+

@@ -173,8 +173,9 @@ class TestDependencyParsing:
             "  # Another comment",
             "pytest>=7.0.0"
         ]
-        
-        requirements = [line.strip() for line in lines if line.strip() and not line.startswith('#')]
+
+        # Ignore full-line comments even if preceded by whitespace
+        requirements = [line.strip() for line in lines if line.strip() and not line.strip().startswith('#')]
         
         assert len(requirements) == 2
         assert 'rich' in requirements[0]

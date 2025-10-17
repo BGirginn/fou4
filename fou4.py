@@ -436,121 +436,51 @@ def interactive_mode():
     """Run the tool in interactive menu mode."""
     from rich.prompt import Prompt
     
-    clear_screen()
-    print_banner()
-    
-    # Check active workspace
-    workspace = get_active_workspace()
-    if workspace:
-        print_success(f"Active workspace: {workspace['name']}")
-    else:
-        print_warning("No active workspace. Create one in the Workspace menu.")
-    
     while True:
+        clear_screen()
+        print_banner()
+        
+        workspace = get_active_workspace()
+        if workspace:
+            print_success(f"Active workspace: {workspace['name']}")
+        else:
+            print_warning("No active workspace. Use the Workspace menu to create or activate one.")
+        
         print("\n")
         print_main_menu()
         
-        choice = Prompt.ask("\n[cyan]Select option[/cyan]", choices=["0", "1", "2", "3", "4", "5", "6", "7"])
+        choice = Prompt.ask("\n[cyan]Select option[/cyan]", choices=["0", "1", "2", "3", "4", "5", "6", "7"], default="0")
         
         if choice == "0":
             print_success("Exiting Kali Tool. Stay safe! 🔒")
             break
         
         elif choice == "1":  # Wi-Fi Attacks
-            from utils.ui import print_wifi_menu
-            from modules.wifi_module import check_wifi_tools
-            
-            if not check_wifi_tools():
-                continue
-            
-            clear_screen()
-            print_wifi_menu()
-            # Wi-Fi module logic would go here
-            print_info("Wi-Fi module - Under construction")
-            input("\nPress Enter to continue...")
+            from modules.wifi_module import run_wifi_module
+            run_wifi_module()
         
         elif choice == "2":  # Network Analysis
-            from utils.ui import print_network_menu
-            from modules.network_module import check_network_tools
-            
-            if not check_network_tools():
-                continue
-            
-            clear_screen()
-            print_network_menu()
-            # Network module logic would go here
-            print_info("Network module - Under construction")
-            input("\nPress Enter to continue...")
+            from modules.network_module import run_network_module
+            run_network_module()
         
         elif choice == "3":  # Web Exploitation
-            from utils.ui import print_web_menu
-            from modules.web_module import check_web_tools
-            
-            if not check_web_tools():
-                continue
-            
-            clear_screen()
-            print_web_menu()
-            # Web module logic would go here
-            print_info("Web module - Under construction")
-            input("\nPress Enter to continue...")
+            from modules.web_module import run_web_module
+            run_web_module()
         
         elif choice == "4":  # OSINT
-            from utils.ui import print_osint_menu
-            
-            clear_screen()
-            print_osint_menu()
-            print_info("OSINT module - Under construction")
-            input("\nPress Enter to continue...")
+            from modules.osint_module import run_osint_module
+            run_osint_module()
         
         elif choice == "5":  # Reporting
-            from utils.ui import print_reporting_menu
-            from modules.reporting_module import display_vulnerability_summary, display_vulnerabilities_table
-            
-            clear_screen()
-            print_reporting_menu()
-            
-            report_choice = Prompt.ask("\n[cyan]Select option[/cyan]", choices=["0", "1", "2"])
-            
-            if report_choice == "1":
-                display_vulnerability_summary()
-                display_vulnerabilities_table()
-            
-            input("\nPress Enter to continue...")
+            from modules.reporting_module import run_reporting_module
+            run_reporting_module()
         
         elif choice == "6":  # Workspace
-            from utils.ui import print_workspace_menu
-            
-            clear_screen()
-            print_workspace_menu()
-            
-            ws_choice = Prompt.ask("\n[cyan]Select option[/cyan]", choices=["0", "1", "2", "3"])
-            
-            if ws_choice == "1":  # Create workspace
-                name = Prompt.ask("[cyan]Workspace name[/cyan]")
-                description = Prompt.ask("[cyan]Description[/cyan]", default="")
-                target = Prompt.ask("[cyan]Target[/cyan]", default="")
-                create_workspace(name, description, target)
-            
-            elif ws_choice == "2":  # Load workspace
-                workspaces = list_workspaces()
-                if workspaces:
-                    for ws in workspaces:
-                        active = "✓" if ws['is_active'] else " "
-                        print_info(f"[{ws['id']}] {ws['name']} {active}")
-                    
-                    ws_id = Prompt.ask("[cyan]Enter workspace ID[/cyan]")
-                    set_active_workspace(int(ws_id))
-                else:
-                    print_warning("No workspaces found")
-            
-            input("\nPress Enter to continue...")
+            from modules.workspace_module import run_workspace_module
+            run_workspace_module()
         
         elif choice == "7":  # Password Attacks
-            from utils.ui import print_password_menu
             from modules.password_module import run_password_module
-            
-            clear_screen()
             run_password_module()
 
 

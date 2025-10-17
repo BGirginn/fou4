@@ -209,8 +209,9 @@ class TestWiFiOutputParsing:
             "AA-BB-CC-DD-EE-FF",  # Wrong separator
             "AABBCCDDEEFF"  # No separator
         ]
-        
-        bssid_pattern = re.compile(r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$')
+
+        # Accept only colon-separated BSSIDs, reject dash-separated ones
+        bssid_pattern = re.compile(r'^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$')
         
         for bssid in valid_bssids:
             assert bssid_pattern.match(bssid) is not None
@@ -229,13 +230,14 @@ class TestWiFiOutputParsing:
             bssid = parts[0].strip()
             
             # Validate BSSID
-            if re.match(r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$', bssid):
+            if re.match(r'^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$', bssid):
                 network = {
                     'bssid': bssid,
                     'power': parts[1].strip(),
-                    'channel': parts[5].strip(),
-                    'encryption': parts[7].strip(),
-                    'essid': parts[10].strip() if len(parts) > 10 else '<Hidden>'
+                    # In the simplified line, the channel value is the 5th field (index 4)
+                    'channel': parts[4].strip(),
+                    'encryption': parts[6].strip(),
+                    'essid': parts[9].strip() if len(parts) > 9 else '<Hidden>'
                 }
                 
                 assert network['bssid'] == "AA:BB:CC:DD:EE:FF"

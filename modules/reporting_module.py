@@ -393,3 +393,34 @@ def export_vulnerabilities_to_html(output_file: str) -> bool:
         print_error(f"Error exporting HTML report: {str(e)}")
         return False
 
+
+from rich.prompt import Prompt
+from utils.ui import print_reporting_menu, clear_screen
+
+def run_reporting_module():
+    """
+    Main function for the Reporting module in interactive mode.
+    """
+    while True:
+        clear_screen()
+        print_reporting_menu()
+        choice = Prompt.ask("\n[cyan]Select option[/cyan]", choices=["0", "1", "2", "3", "4"], default="0")
+        if choice == "0": break
+        if choice == "1": # Generate/View Report
+            display_vulnerability_summary()
+            display_vulnerabilities_table()
+        elif choice == "2": # View is same as Generate
+            display_vulnerability_summary()
+            display_vulnerabilities_table()
+        elif choice == "3": # Export
+            file_format = Prompt.ask("Choose format", choices=["html", "json"], default="html")
+            filename = Prompt.ask("Enter output filename", default=f"report.{file_format}")
+            if file_format == 'html':
+                export_vulnerabilities_to_html(filename)
+            else:
+                export_vulnerabilities_to_json(filename)
+        else:
+            print_warning("This feature is not yet implemented.")
+
+        input("\nPress Enter to continue...")
+

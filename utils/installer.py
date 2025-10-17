@@ -1,4 +1,9 @@
 import subprocess
+try:
+    # Optional rich Prompt for nicer UX; tests patch this symbol
+    from rich.prompt import Prompt
+except Exception:  # pragma: no cover
+    Prompt = None
 from utils.console import console, print_info, print_success, print_error, print_warning
 
 def install_package(package_name: str) -> bool:
@@ -14,7 +19,10 @@ def install_package(package_name: str) -> bool:
     try:
         # Get user confirmation
         print_warning(f"Package '{package_name}' is not installed.")
-        response = input(f"Do you want to install {package_name}? [Y/n]: ").strip().lower()
+        if Prompt:
+            response = Prompt.ask(f"Do you want to install {package_name}? [Y/n]", default='y').strip().lower()
+        else:
+            response = input(f"Do you want to install {package_name}? [Y/n]: ").strip().lower()
         
         if response not in ['y', 'yes', '']:
             print_info("Installation cancelled by user.")

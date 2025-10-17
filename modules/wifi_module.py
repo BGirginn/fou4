@@ -671,3 +671,72 @@ def crack_handshake(capture_file: str, wordlist: str) -> Optional[str]:
         print_error(f"Error during password cracking: {str(e)}")
         return None
 
+
+# Interactive Mode Handler
+from rich.prompt import Prompt
+from utils.ui import print_wifi_menu, clear_screen
+from utils.config import get_wordlist
+
+def run_wifi_module():
+    """
+    Main function for the Wi-Fi module in interactive mode.
+    """
+    if not check_wifi_tools(): return
+
+    interfaces = get_wireless_interfaces()
+    if not interfaces:
+        print_error("No wireless interfaces found. Aborting Wi-Fi module.")
+        return
+    
+    print_info(f"Available interfaces: {', '.join(interfaces)}")
+    interface = Prompt.ask("\n[cyan]Select an interface to use[/cyan]", choices=interfaces, default=interfaces[0])
+
+    monitor_interface = None
+
+    while True:
+        clear_screen()
+        print_wifi_menu()
+        choice = Prompt.ask("\n[cyan]Select option[/cyan]", choices=["0", "1", "2", "3", "4", "5"], default="0")
+
+        if choice == "0": 
+            if monitor_interface: disable_monitor_mode(monitor_interface)
+            break
+
+        if choice == "1": # Monitor Mode
+            if monitor_interface:
+                if Prompt.ask(f"[yellow]Monitor mode is active on {monitor_interface}. Disable it?[/yellow]", default=True):
+                    disable_monitor_mode(monitor_interface)
+                    monitor_interface = None
+            else:
+                if Prompt.ask(f"[cyan]Enable monitor mode on {interface}?[/cyan]", default=True):
+                    monitor_interface = enable_monitor_mode(interface)
+
+        elif choice == "2": # Network Scan
+            if not monitor_interface: monitor_interface = enable_monitor_mode(interface)
+            if monitor_interface: 
+                duration = int(Prompt.ask("Enter scan duration (seconds)", default="30"))
+                scan_wifi_networks(monitor_interface, duration)
+
+        elif choice == "3": # Deauth Attack
+            if not monitor_interface: monitor_interface = enable_monitor_mode(interface)
+            if monitor_interface:
+                bssid = Prompt.ask("Enter target BSSID (MAC Address)")
+                client = Prompt.ask("Enter client MAC (optional, press Enter for broadcast)", default="FF:FF:FF:FF:FF:FF")
+                count = int(Prompt.ask("Number of packets (0 for continuous)", default="10"))
+                perform_deauth_attack(monitor_interface, bssid, client, count)
+
+        elif choice == "4": # Handshake Capture
+            if not monitor_interface: monitor_interface = enable_monitor_mode(interface)
+            if monitor_interface:
+                bssid = Prompt.ask("Enter target BSSID")
+                channel = Prompt.ask("Enter target channel")
+                duration = int(Prompt.ask("Enter capture duration (seconds)", default="60"))
+                capture_handshake_with_deauth(monitor_interface, bssid, channel, max_duration=duration)
+
+        elif choice == "5": # Password Cracking
+            cap_file = Prompt.ask("Enter path to .cap file")
+            wordlist = Prompt.ask("Enter path to wordlist", default=get_wordlist('passwords'))
+            crack_handshake(cap_file, wordlist)
+
+        input("\nPress Enter to continue...")
+
