@@ -22,6 +22,70 @@ from utils.db import initialize_database, get_active_workspace, set_active_works
 from utils.config import load_config
 
 
+# --- Global Dependency Definitions ---
+REQUIRED_TOOLS = {
+    # Tool Name: Package Name
+    'nmap': 'nmap',
+    'aircrack-ng': 'aircrack-ng',
+    'hydra': 'hydra',
+    'theHarvester': 'theharvester',
+    'sqlmap': 'sqlmap',
+    'gobuster': 'gobuster',
+    'dirb': 'dirb',
+    'nikto': 'nikto',
+    'subfinder': 'subfinder',
+    'masscan': 'masscan',
+    'tcpdump': 'tcpdump'
+}
+
+def check_all_system_dependencies():
+    """
+    Checks for all required external tools at startup and prompts for installation if missing.
+    Returns True if all dependencies are met or installed, False if a critical installation fails.
+    """
+    from utils.checker import check_tool
+    from utils.installer import install_package
+    try:
+        from rich.prompt import Confirm
+    except Exception:
+        Confirm = None
+
+    print_info("Checking for required system tools...")
+    all_tools_present = True
+    missing_tools = []
+
+    for tool in REQUIRED_TOOLS.keys():
+        if not check_tool(tool):
+            all_tools_present = False
+            missing_tools.append(tool)
+    
+    if all_tools_present:
+        print_success("All required system tools are installed.")
+        return True
+    
+    print_warning(f"Missing tools detected: {', '.join(missing_tools)}")
+    proceed = True
+    if Confirm:
+        proceed = Confirm.ask("[yellow]Some tools are missing. Do you want to try and install them now?[/yellow]", default=True)
+    else:
+        try:
+            resp = input("Some tools are missing. Install now? [Y/n]: ").strip().lower()
+            proceed = resp in ("", "y", "yes")
+        except Exception:
+            proceed = False
+    if not proceed:
+        print_error("Cannot proceed without required tools. Aborting.")
+        return False
+
+    for tool in missing_tools:
+        package_name = REQUIRED_TOOLS[tool]
+        if not install_package(package_name):
+            print_error(f"Failed to install '{package_name}'. Please install it manually and restart the application.")
+            return False
+            
+    print_success("All required tools have been installed successfully!")
+    return True
+
 def setup_argparse():
     """
     Setup argument parser for non-interactive mode.
@@ -491,6 +555,10 @@ def main():
         print("\n✗ Error: Failed to satisfy Python dependencies")
         print("ℹ Please install dependencies manually and try again:")
         print("  pip3 install -r requirements.txt")
+        sys.exit(1)
+    
+    # Check for all external system tool dependencies
+    if not check_all_system_dependencies():
         sys.exit(1)
     
     # Initialize database

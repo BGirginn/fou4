@@ -681,7 +681,7 @@ def run_wifi_module():
     """
     Main function for the Wi-Fi module in interactive mode.
     """
-    if not check_wifi_tools(): return
+    # Global dependency check runs at startup; local checks removed
 
     interfaces = get_wireless_interfaces()
     if not interfaces:

@@ -441,8 +441,7 @@ def run_password_module() -> None:
     Main function for the password attack module.
     Interactive menu for selecting attack type and parameters.
     """
-    if not check_password_tools():
-        return
+    # Global dependency check runs at startup; local checks removed
     
     # Display service menu
     console.print("\n[bold cyan]═══ Password Attack Module ═══[/bold cyan]\n")

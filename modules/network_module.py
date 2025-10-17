@@ -598,7 +598,7 @@ def run_network_module():
     """
     Main function for the Network module in interactive mode.
     """
-    if not check_network_tools(): return
+    # Global dependency check runs at startup; local checks removed
 
     while True:
         clear_screen()

@@ -54,7 +54,7 @@ def run_subfinder(domain: str):
         print_error(f"subfinder scan failed: {e}")
 
 def run_osint_module():
-    if not check_osint_tools(): return
+    # Global dependency check runs at startup; local checks removed
 
     while True:
         clear_screen()

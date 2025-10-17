@@ -424,7 +424,7 @@ def run_web_module():
     """
     Main function for the Web module in interactive mode.
     """
-    if not check_web_tools(): return
+    # Global dependency check runs at startup; local checks removed
 
     while True:
         clear_screen()
