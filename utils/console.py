@@ -1,46 +1,35 @@
-"""
-Console module for rich terminal output.
-
-This module provides a centralized Rich Console object for consistent
-and beautiful terminal output throughout the application.
-"""
 from rich.console import Console
 from rich.theme import Theme
 
-# Custom theme for FOU4
+# Create custom theme with color codes for different message types
 custom_theme = Theme({
     "info": "cyan",
     "success": "bold green",
     "warning": "yellow",
     "error": "bold red",
-    "highlight": "bold magenta",
-    "title": "bold blue",
+    "highlight": "bold magenta"
 })
 
-# Global console instance
+# Global console object with custom theme
 console = Console(theme=custom_theme)
 
-# Convenience print functions
 def print_info(message: str):
-    """Print informational message."""
-    console.print(f"[info]ℹ {message}[/info]")
-
+    """Print an informational message with info styling."""
+    console.print(f"ℹ {message}", style="info")
 
 def print_success(message: str):
-    """Print success message."""
-    console.print(f"[success]✓ {message}[/success]")
-
+    """Print a success message with success styling."""
+    console.print(f"✓ {message}", style="success")
 
 def print_warning(message: str):
-    """Print warning message."""
-    console.print(f"[warning]⚠ {message}[/warning]")
-
+    """Print a warning message with warning styling."""
+    console.print(f"⚠ {message}", style="warning")
 
 def print_error(message: str):
-    """Print error message."""
-    console.print(f"[error]✗ {message}[/error]")
-
+    """Print an error message with error styling."""
+    console.print(f"✗ {message}", style="error")
 
 def print_highlight(message: str):
-    """Print highlighted message."""
-    console.print(f"[highlight]★ {message}[/highlight]")
+    """Print a highlighted message with highlight styling."""
+    console.print(f"★ {message}", style="highlight")
+

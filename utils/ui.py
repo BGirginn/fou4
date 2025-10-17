@@ -1,216 +1,269 @@
-"""
-UI module for handling user interface elements and screen management.
-
-This module provides utilities for creating a clean and consistent
-user interface using Rich library for enhanced terminal output.
-"""
 import os
-import sys
 from rich.panel import Panel
 from rich.text import Text
 from rich import box
 from utils.console import console
 
-
 def print_banner():
-    """
-    Display the FOU4 ASCII art logo and welcome message.
+    """Display the project's ASCII art logo and version number."""
+    banner_text = Text()
+    banner_text.append("╦╔═╔═╗╦  ╦  ═╦═╔═╗╔═╗╦  \n", style="bold cyan")
+    banner_text.append("╠╩╗╠═╣║  ║   ║ ║ ║║ ║║  \n", style="bold cyan")
+    banner_text.append("╩ ╩╩ ╩╩═╝╩   ╩ ╚═╝╚═╝╩═╝\n", style="bold cyan")
+    banner_text.append("\nPenetration Testing Toolkit", style="bold magenta")
+    banner_text.append("\nVersion 1.0.0", style="yellow")
     
-    Shows the FOU4 banner with ASCII art and a brief description
-    of how to use the tool.
-    
-    Args:
-        None
-        
-    Returns:
-        None
-    """
-    banner = r"""
-    ___/\/\/\______________________________/\/\/\___
-    _/\/\________/\/\/\____/\/\__/\/\____/\/\/\/\___ 
-   _/\/\/\____/\/\__/\/\__/\/\__/\/\__/\/\__/\/\___  
-  _/\/\______/\/\__/\/\__/\/\__/\/\__/\/\/\/\/\/\_   
- _/\/\________/\/\/\______/\/\/\/\________/\/\___    
-________________________________________________      
-    """    # Display banner
-    banner_text = Text(banner, style="bold cyan")
-    console.print(banner_text, justify="center")
-    
-    # Display tagline
-    tagline = Text()
-    tagline.append("Forensic Utility Tool ", style="bold white")
-    tagline.append("v1.4.1", style="bold yellow")
-    console.print(tagline, justify="center")
-    console.print()
-    
-    # Display usage description
-    description = Panel.fit(
-        "[bold cyan]Welcome to FOU4![/bold cyan]\n\n"
-        "[white]A comprehensive security testing toolkit for network analysis, web discovery, and OSINT.\n"
-        "Navigate through modules using the numbered menu, and follow on-screen prompts.[/white]",
-        border_style="blue",
-        box=box.ROUNDED,
+    banner_panel = Panel(
+        banner_text,
+        box=box.DOUBLE,
+        border_style="bright_blue",
         padding=(1, 2)
     )
-    console.print(description)
-    console.print()
-
+    console.print(banner_panel)
 
 def clear_screen():
-    """
-    Clear the terminal screen based on the operating system.
-    
-    This function detects the operating system and uses the appropriate
-    command to clear the terminal screen. Works on Windows (cls) and
-    Unix/Linux/MacOS (clear).
-    
-    Args:
-        None
-        
-    Returns:
-        None
-        
-    Examples:
-        >>> clear_screen()
-        # Screen is cleared
-    
-    Note:
-        - Uses os.name to detect the operating system
-        - Falls back gracefully if clearing fails
-    """
-    try:
-        # For Windows
-        if os.name == 'nt':
-            os.system('cls')
-        # For Unix/Linux/MacOS
-        else:
-            os.system('clear')
-    except Exception as e:
-        # If clearing fails, just print newlines
-        print('\n' * 100)
-
+    """Clear the terminal screen."""
+    os.system('cls' if os.name == 'nt' else 'clear')
 
 def print_main_menu():
-    """
-    Display the main menu with available module options.
-    
-    Shows the FOU4 main menu with all available forensic modules.
-    This is the primary navigation interface for the application.
-    
-    Args:
-        None
-        
-    Returns:
-        None
-        
-    Note:
-        Menu includes: Wi-Fi, Network, Web modules and Exit option
-    """
-    # Create title
-    title = Text("FOU4 - Forensic Utility Tool", style="bold blue", justify="center")
-    
-    # Create menu content
+    """Display the main menu with all available modules."""
     menu_text = Text()
-    menu_text.append("\n📋 Main Menu - Module Selection:\n\n", style="bold cyan")
-    menu_text.append("  [1] ", style="bold yellow")
-    menu_text.append("Wi-Fi Module", style="white")
-    menu_text.append("       📡 Wireless network analysis\n", style="dim")
+    menu_text.append("📡 [1] Wi-Fi Attacks", style="bold cyan")
+    menu_text.append(" - Wireless network penetration testing\n", style="dim")
     
-    menu_text.append("  [2] ", style="bold yellow")
-    menu_text.append("Network Module", style="white")
-    menu_text.append("     🌐 Port scanning and discovery\n", style="dim")
+    menu_text.append("🌐 [2] Network Analysis", style="bold cyan")
+    menu_text.append(" - Network scanning and enumeration\n", style="dim")
     
-    menu_text.append("  [3] ", style="bold yellow")
-    menu_text.append("Web Module", style="white")
-    menu_text.append("         🔍 Web application scanning\n", style="dim")
+    menu_text.append("🕸️  [3] Web Exploitation", style="bold cyan")
+    menu_text.append(" - Web application security testing\n", style="dim")
     
-    menu_text.append("  [4] ", style="bold yellow")
-    menu_text.append("OSINT Module", style="white")
-    menu_text.append("       🕵️  Passive information gathering\n", style="dim")
+    menu_text.append("🔍 [4] OSINT Tools", style="bold cyan")
+    menu_text.append(" - Open source intelligence gathering\n", style="dim")
     
-    menu_text.append("  [5] ", style="bold yellow")
-    menu_text.append("Reporting", style="white")
-    menu_text.append("          📄 Generate reports\n", style="dim")
+    menu_text.append("📊 [5] Reporting", style="bold cyan")
+    menu_text.append(" - Generate and manage security reports\n", style="dim")
     
-    menu_text.append("  [9] ", style="bold cyan")
-    menu_text.append("Workspace", style="white")
-    menu_text.append("          🗂️  Workspace management\n", style="dim")
+    menu_text.append("💾 [6] Workspace", style="bold cyan")
+    menu_text.append(" - Manage project workspace and files\n", style="dim")
     
-    menu_text.append("  [0] ", style="bold red")
-    menu_text.append("Exit", style="white")
-    menu_text.append("              ❌ Exit program\n", style="dim")
+    menu_text.append("🔐 [7] Password Attacks", style="bold cyan")
+    menu_text.append(" - Online password attacks with Hydra\n", style="dim")
     
-    # Create panel
-    panel = Panel(
+    menu_text.append("🚪 [0] Exit", style="bold red")
+    menu_text.append(" - Exit the application", style="dim")
+    
+    menu_panel = Panel(
         menu_text,
-        title=title,
-        border_style="blue",
-        box=box.DOUBLE,
+        title="[bold white]Main Menu[/bold white]",
+        box=box.ROUNDED,
+        border_style="green",
         padding=(1, 2)
     )
-    
-    console.print(panel)
+    console.print(menu_panel)
 
+def print_password_menu():
+    """Display the Password Attacks module menu."""
+    menu_text = Text()
+    menu_text.append("🔐 [1] SSH Attack", style="bold cyan")
+    menu_text.append(" - Brute force SSH credentials\n", style="dim")
+    
+    menu_text.append("📁 [2] FTP Attack", style="bold cyan")
+    menu_text.append(" - Brute force FTP credentials\n", style="dim")
+    
+    menu_text.append("🌐 [3] HTTP POST Attack", style="bold cyan")
+    menu_text.append(" - Brute force web login forms\n", style="dim")
+    
+    menu_text.append("🗄️  [4] Database Attack", style="bold cyan")
+    menu_text.append(" - MySQL, PostgreSQL, MSSQL attacks\n", style="dim")
+    
+    menu_text.append("📞 [5] Remote Services", style="bold cyan")
+    menu_text.append(" - Telnet, RDP, VNC attacks\n", style="dim")
+    
+    menu_text.append("⚙️  [6] Custom Service", style="bold cyan")
+    menu_text.append(" - Attack any supported service\n", style="dim")
+    
+    menu_text.append("📋 [7] View Captured Credentials", style="bold cyan")
+    menu_text.append(" - Display saved credentials\n", style="dim")
+    
+    menu_text.append("⬅️  [0] Back to Main Menu", style="bold yellow")
+    
+    menu_panel = Panel(
+        menu_text,
+        title="[bold white]Password Attacks Module[/bold white]",
+        box=box.ROUNDED,
+        border_style="cyan",
+        padding=(1, 2)
+    )
+    console.print(menu_panel)
+
+def print_wifi_menu():
+    """Display the Wi-Fi attacks module menu."""
+    menu_text = Text()
+    menu_text.append("📶 [1] Monitor Mode", style="bold cyan")
+    menu_text.append(" - Enable/disable monitor mode\n", style="dim")
+    
+    menu_text.append("🔎 [2] Network Scan", style="bold cyan")
+    menu_text.append(" - Scan for nearby wireless networks\n", style="dim")
+    
+    menu_text.append("💥 [3] Deauth Attack", style="bold cyan")
+    menu_text.append(" - Perform deauthentication attack\n", style="dim")
+    
+    menu_text.append("🔓 [4] Handshake Capture", style="bold cyan")
+    menu_text.append(" - Capture WPA/WPA2 handshakes\n", style="dim")
+    
+    menu_text.append("🔑 [5] Password Cracking", style="bold cyan")
+    menu_text.append(" - Crack captured handshakes\n", style="dim")
+    
+    menu_text.append("⬅️  [0] Back to Main Menu", style="bold yellow")
+    
+    menu_panel = Panel(
+        menu_text,
+        title="[bold white]Wi-Fi Attacks Module[/bold white]",
+        box=box.ROUNDED,
+        border_style="cyan",
+        padding=(1, 2)
+    )
+    console.print(menu_panel)
+
+def print_network_menu():
+    """Display the Network Analysis module menu."""
+    menu_text = Text()
+    menu_text.append("🎯 [1] Port Scanning", style="bold cyan")
+    menu_text.append(" - Scan target ports with Nmap\n", style="dim")
+    
+    menu_text.append("🔍 [2] Service Detection", style="bold cyan")
+    menu_text.append(" - Detect running services and versions\n", style="dim")
+    
+    menu_text.append("🗺️  [3] Network Mapping", style="bold cyan")
+    menu_text.append(" - Map network topology\n", style="dim")
+    
+    menu_text.append("🕵️  [4] Vulnerability Scan", style="bold cyan")
+    menu_text.append(" - Scan for known vulnerabilities\n", style="dim")
+    
+    menu_text.append("📡 [5] Packet Sniffing", style="bold cyan")
+    menu_text.append(" - Capture and analyze network traffic\n", style="dim")
+    
+    menu_text.append("⬅️  [0] Back to Main Menu", style="bold yellow")
+    
+    menu_panel = Panel(
+        menu_text,
+        title="[bold white]Network Analysis Module[/bold white]",
+        box=box.ROUNDED,
+        border_style="cyan",
+        padding=(1, 2)
+    )
+    console.print(menu_panel)
 
 def print_web_menu():
-    """
-    Display the Web Discovery Module menu with available tools.
-    
-    Shows a submenu with web reconnaissance and directory scanning
-    tools like Gobuster, Dirb, and Feroxbuster.
-    
-    Args:
-        None
-        
-    Returns:
-        None
-        
-    Note:
-        Tools are for web application security testing and discovery
-    """
-    # Create title
-    title = Text("🔍 Web Discovery Module", style="bold magenta")
-    
-    # Create menu content
+    """Display the Web Exploitation module menu."""
     menu_text = Text()
-    menu_text.append("\n🛠️  Directory/File Scanning Tools:\n\n", style="bold cyan")
+    menu_text.append("🔍 [1] Directory Enumeration", style="bold cyan")
+    menu_text.append(" - Find hidden directories and files\n", style="dim")
     
-    menu_text.append("  [1] ", style="bold yellow")
-    menu_text.append("Gobuster", style="white")
-    menu_text.append("     - Fast directory and file scanner\n", style="dim")
+    menu_text.append("🎭 [2] SQL Injection", style="bold cyan")
+    menu_text.append(" - Test for SQL injection vulnerabilities\n", style="dim")
     
-    menu_text.append("  [2] ", style="bold yellow")
-    menu_text.append("Dirb", style="white")
-    menu_text.append("          - Classic web content scanner\n", style="dim")
+    menu_text.append("🌊 [3] XSS Detection", style="bold cyan")
+    menu_text.append(" - Detect Cross-Site Scripting flaws\n", style="dim")
     
-    menu_text.append("  [3] ", style="bold yellow")
-    menu_text.append("Feroxbuster", style="white")
-    menu_text.append(" - Modern and powerful scanner\n", style="dim")
+    menu_text.append("🔐 [4] Authentication Testing", style="bold cyan")
+    menu_text.append(" - Test authentication mechanisms\n", style="dim")
     
-    menu_text.append("  [0] ", style="bold red")
-    menu_text.append("Back", style="white")
-    menu_text.append("          - Return to main menu\n", style="dim")
+    menu_text.append("🕷️  [5] Web Crawler", style="bold cyan")
+    menu_text.append(" - Crawl and map web applications\n", style="dim")
     
-    # Create panel
-    panel = Panel(
+    menu_text.append("⬅️  [0] Back to Main Menu", style="bold yellow")
+    
+    menu_panel = Panel(
         menu_text,
-        title=title,
-        border_style="magenta",
+        title="[bold white]Web Exploitation Module[/bold white]",
         box=box.ROUNDED,
+        border_style="cyan",
         padding=(1, 2)
     )
+    console.print(menu_panel)
+
+def print_osint_menu():
+    """Display the OSINT Tools module menu."""
+    menu_text = Text()
+    menu_text.append("🔎 [1] Domain Lookup", style="bold cyan")
+    menu_text.append(" - Gather domain information\n", style="dim")
     
-    console.print(panel)
+    menu_text.append("📧 [2] Email Harvesting", style="bold cyan")
+    menu_text.append(" - Collect email addresses\n", style="dim")
+    
+    menu_text.append("🌐 [3] Subdomain Enumeration", style="bold cyan")
+    menu_text.append(" - Find subdomains of target\n", style="dim")
+    
+    menu_text.append("👤 [4] Social Media OSINT", style="bold cyan")
+    menu_text.append(" - Gather social media intelligence\n", style="dim")
+    
+    menu_text.append("🗂️  [5] Metadata Extraction", style="bold cyan")
+    menu_text.append(" - Extract metadata from files\n", style="dim")
+    
+    menu_text.append("⬅️  [0] Back to Main Menu", style="bold yellow")
+    
+    menu_panel = Panel(
+        menu_text,
+        title="[bold white]OSINT Tools Module[/bold white]",
+        box=box.ROUNDED,
+        border_style="cyan",
+        padding=(1, 2)
+    )
+    console.print(menu_panel)
 
+def print_reporting_menu():
+    """Display the Reporting module menu."""
+    menu_text = Text()
+    menu_text.append("📝 [1] Generate Report", style="bold cyan")
+    menu_text.append(" - Create a new security report\n", style="dim")
+    
+    menu_text.append("📋 [2] View Reports", style="bold cyan")
+    menu_text.append(" - List all saved reports\n", style="dim")
+    
+    menu_text.append("📤 [3] Export Report", style="bold cyan")
+    menu_text.append(" - Export report to PDF/HTML\n", style="dim")
+    
+    menu_text.append("🗑️  [4] Delete Report", style="bold cyan")
+    menu_text.append(" - Remove a saved report\n", style="dim")
+    
+    menu_text.append("⬅️  [0] Back to Main Menu", style="bold yellow")
+    
+    menu_panel = Panel(
+        menu_text,
+        title="[bold white]Reporting Module[/bold white]",
+        box=box.ROUNDED,
+        border_style="cyan",
+        padding=(1, 2)
+    )
+    console.print(menu_panel)
 
-if __name__ == "__main__":
-    # Test the UI functions
-    console.print("\n[bold cyan]UI Module - Test[/bold cyan]")
-    console.print("[info]Clearing screen...[/info]")
-    clear_screen()
-    console.print("[info]Displaying main menu...[/info]\n")
-    print_main_menu()
-    input("\n[bold green]Test completed. Press Enter to continue...[/bold green]")
-    console.print("\n[info]Displaying web menu...[/info]\n")
-    print_web_menu()
-    input("\n[bold green]Test completed. Press Enter to continue...[/bold green]")
+def print_workspace_menu():
+    """Display the Workspace module menu."""
+    menu_text = Text()
+    menu_text.append("📁 [1] Create Workspace", style="bold cyan")
+    menu_text.append(" - Initialize a new workspace\n", style="dim")
+    
+    menu_text.append("📂 [2] Load Workspace", style="bold cyan")
+    menu_text.append(" - Load an existing workspace\n", style="dim")
+    
+    menu_text.append("💾 [3] Save Current Session", style="bold cyan")
+    menu_text.append(" - Save current work session\n", style="dim")
+    
+    menu_text.append("🗂️  [4] Manage Files", style="bold cyan")
+    menu_text.append(" - Organize workspace files\n", style="dim")
+    
+    menu_text.append("🧹 [5] Clean Workspace", style="bold cyan")
+    menu_text.append(" - Clean temporary files\n", style="dim")
+    
+    menu_text.append("⬅️  [0] Back to Main Menu", style="bold yellow")
+    
+    menu_panel = Panel(
+        menu_text,
+        title="[bold white]Workspace Module[/bold white]",
+        box=box.ROUNDED,
+        border_style="cyan",
+        padding=(1, 2)
+    )
+    console.print(menu_panel)
+

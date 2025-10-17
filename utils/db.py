@@ -1,103 +1,184 @@
-"""
-Database Module - SQLite database management for FOU4.
-
-This module provides functions to store scan results persistently,
-including hosts, ports, and web findings.
-"""
 import sqlite3
 import os
-import sys
-from datetime import datetime
-from pathlib import Path
+from utils.console import print_info, print_success, print_error, print_warning
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Database file path
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "kali_tool.db")
 
-from utils.console import console, print_success, print_error, print_warning, print_info
-
-
-def _resolve_db_path():
-    """Return the absolute path to the SQLite database file.
-
-    The original implementation stored the database alongside the source
-    code which works when running from a git checkout, but it fails once
-    the project is installed as a package because the install location is
-    typically read-only.  This helper places the database inside an OS
-    appropriate user data directory and still honours the ``FOU4_DB_PATH``
-    environment variable for advanced users.
+def get_connection() -> sqlite3.Connection:
     """
-
-    override = os.environ.get("FOU4_DB_PATH")
-    if override:
-        candidate = Path(os.path.expanduser(override)).resolve()
-        directory = candidate.parent
-        directory.mkdir(parents=True, exist_ok=True)
-        return str(candidate)
-
-    if sys.platform.startswith("win"):
-        base_dir = os.environ.get("APPDATA")
-        if not base_dir:
-            base_dir = Path.home() / "AppData" / "Roaming"
-        data_dir = Path(base_dir) / "FOU4"
-    else:
-        xdg_dir = os.environ.get("XDG_DATA_HOME")
-        if xdg_dir:
-            data_dir = Path(os.path.expanduser(xdg_dir)) / "fou4"
-        else:
-            data_dir = Path.home() / ".local" / "share" / "fou4"
-
-    data_dir.mkdir(parents=True, exist_ok=True)
-    return str((data_dir / "fou4.db").resolve())
-
-
-# Database file path (stored in a writable per-user directory by default)
-DB_PATH = _resolve_db_path()
-
-
-def get_database_path():
-    """Return the path to the SQLite database used by FOU4."""
-
-    return DB_PATH
-
-
-def get_connection():
-    """
-    Get a connection to the SQLite database.
+    Create and return a database connection with foreign keys enabled.
     
     Returns:
         sqlite3.Connection: Database connection object
-        
-    Raises:
-        sqlite3.Error: If connection fails
     """
     try:
-        # Enable foreign key support
         conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row  # Enable column access by name
-        conn.execute('PRAGMA foreign_keys = ON')  # Enable foreign key constraints
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.row_factory = sqlite3.Row
         return conn
-    except sqlite3.Error as e:
-        print_error(f"Database connection failed: {e}")
-        raise
     except Exception as e:
-        print_error(f"Unexpected error connecting to database: {e}")
+        print_error(f"Failed to connect to database: {str(e)}")
         raise
-
 
 def initialize_database():
+    """Initialize the database with all required tables and indexes."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Create workspaces table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS workspaces (
+                id INTEGER PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL,
+                description TEXT,
+                target TEXT,
+                is_active INTEGER DEFAULT 0
+            )
+        """)
+        
+        # Create hosts table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS hosts (
+                id INTEGER PRIMARY KEY,
+                workspace_id INTEGER NOT NULL,
+                ip_address TEXT NOT NULL,
+                hostname TEXT,
+                UNIQUE(workspace_id, ip_address),
+                FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+            )
+        """)
+        
+        # Create ports table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ports (
+                id INTEGER PRIMARY KEY,
+                host_id INTEGER NOT NULL,
+                port INTEGER NOT NULL,
+                protocol TEXT NOT NULL,
+                service TEXT,
+                UNIQUE(host_id, port, protocol),
+                FOREIGN KEY(host_id) REFERENCES hosts(id) ON DELETE CASCADE
+            )
+        """)
+        
+        # Create web_findings table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS web_findings (
+                id INTEGER PRIMARY KEY,
+                host_id INTEGER NOT NULL,
+                url TEXT NOT NULL,
+                found_path TEXT NOT NULL,
+                status_code INTEGER,
+                UNIQUE(host_id, url, found_path),
+                FOREIGN KEY(host_id) REFERENCES hosts(id) ON DELETE CASCADE
+            )
+        """)
+        
+        # Create osint_emails table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS osint_emails (
+                id INTEGER PRIMARY KEY,
+                workspace_id INTEGER NOT NULL,
+                domain TEXT NOT NULL,
+                email TEXT NOT NULL,
+                source TEXT,
+                UNIQUE(workspace_id, domain, email),
+                FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+            )
+        """)
+        
+        # Create osint_subdomains table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS osint_subdomains (
+                id INTEGER PRIMARY KEY,
+                workspace_id INTEGER NOT NULL,
+                domain TEXT NOT NULL,
+                subdomain TEXT NOT NULL,
+                ip_address TEXT,
+                UNIQUE(workspace_id, domain, subdomain),
+                FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+            )
+        """)
+        
+        # Create osint_ips table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS osint_ips (
+                id INTEGER PRIMARY KEY,
+                workspace_id INTEGER NOT NULL,
+                ip_address TEXT NOT NULL,
+                location TEXT,
+                organization TEXT,
+                UNIQUE(workspace_id, ip_address),
+                FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+            )
+        """)
+        
+        # Create vulnerabilities table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS vulnerabilities (
+                id INTEGER PRIMARY KEY,
+                host_id INTEGER NOT NULL,
+                port INTEGER,
+                cve TEXT,
+                description TEXT NOT NULL,
+                severity TEXT,
+                UNIQUE(host_id, port, cve),
+                FOREIGN KEY(host_id) REFERENCES hosts(id) ON DELETE CASCADE
+            )
+        """)
+        
+        # Create credentials table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS credentials (
+                id INTEGER PRIMARY KEY,
+                host_id INTEGER NOT NULL,
+                service TEXT NOT NULL,
+                port TEXT,
+                username TEXT NOT NULL,
+                password TEXT NOT NULL,
+                UNIQUE(host_id, service, username),
+                FOREIGN KEY(host_id) REFERENCES hosts(id) ON DELETE CASCADE
+            )
+        """)
+        
+        # Create performance indexes
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hosts_workspace ON hosts(workspace_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hosts_ip ON hosts(ip_address)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ports_host ON ports(host_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ports_port ON ports(port)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_web_findings_host ON web_findings(host_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_osint_emails_workspace ON osint_emails(workspace_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_osint_emails_domain ON osint_emails(domain)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_osint_subdomains_workspace ON osint_subdomains(workspace_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_osint_subdomains_domain ON osint_subdomains(domain)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_osint_ips_workspace ON osint_ips(workspace_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_workspaces_active ON workspaces(is_active)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_vulnerabilities_host ON vulnerabilities(host_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_vulnerabilities_cve ON vulnerabilities(cve)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_credentials_host ON credentials(host_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_credentials_service ON credentials(service)")
+        
+        conn.commit()
+        conn.close()
+        print_success("Database initialized successfully.")
+        
+    except Exception as e:
+        print_error(f"Failed to initialize database: {str(e)}")
+        raise
+
+# ==================== Workspace Functions ====================
+
+def create_workspace(name: str, description: str = "", target: str = "") -> bool:
     """
-    Initialize the database and create tables if they don't exist.
+    Create a new workspace.
     
-    Creates the following tables:
-    - workspaces: Stores workspace/project information
-    - hosts: Stores scanned host information
-    - ports: Stores open port information for each host
-    - web_findings: Stores discovered web directories/files
-    - scan_sessions: Stores scan session metadata
-    - osint_emails: Stores discovered email addresses
-    - osint_subdomains: Stores discovered subdomains
-    - osint_ips: Stores discovered IP addresses
-    
+    Args:
+        name: Workspace name
+        description: Workspace description
+        target: Target of the workspace
+        
     Returns:
         bool: True if successful, False otherwise
     """
@@ -105,249 +186,54 @@ def initialize_database():
         conn = get_connection()
         cursor = conn.cursor()
         
-        # Create workspaces table (NEW!)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS workspaces (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL UNIQUE,
-                description TEXT,
-                target TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_used TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                is_active INTEGER DEFAULT 0
-            )
-        ''')
-        
-        # Create hosts table (with workspace_id)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS hosts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                workspace_id INTEGER NOT NULL,
-                ip_address TEXT NOT NULL,
-                hostname TEXT,
-                first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE,
-                UNIQUE(workspace_id, ip_address)
-            )
-        ''')
-        
-        # Create ports table (workspace_id inherited from host)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS ports (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                host_id INTEGER NOT NULL,
-                port INTEGER NOT NULL,
-                protocol TEXT NOT NULL,
-                service TEXT,
-                discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (host_id) REFERENCES hosts (id) ON DELETE CASCADE,
-                UNIQUE(host_id, port, protocol)
-            )
-        ''')
-        
-        # Create web_findings table (workspace_id inherited from host)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS web_findings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                host_id INTEGER NOT NULL,
-                url TEXT NOT NULL,
-                found_path TEXT NOT NULL,
-                status_code INTEGER,
-                discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (host_id) REFERENCES hosts (id) ON DELETE CASCADE,
-                UNIQUE(host_id, url, found_path)
-            )
-        ''')
-        
-        # Create scan_sessions table (with workspace_id)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS scan_sessions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                workspace_id INTEGER NOT NULL,
-                module_name TEXT NOT NULL,
-                target TEXT NOT NULL,
-                tool_name TEXT,
-                started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                completed_at TIMESTAMP,
-                status TEXT DEFAULT 'running',
-                results_count INTEGER DEFAULT 0,
-                FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE
-            )
-        ''')
-        
-        # Create OSINT emails table (with workspace_id)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS osint_emails (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                workspace_id INTEGER NOT NULL,
-                domain TEXT NOT NULL,
-                email TEXT NOT NULL,
-                source TEXT,
-                discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE,
-                UNIQUE(workspace_id, domain, email)
-            )
-        ''')
-        
-        # Create OSINT subdomains table (with workspace_id)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS osint_subdomains (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                workspace_id INTEGER NOT NULL,
-                domain TEXT NOT NULL,
-                subdomain TEXT NOT NULL,
-                ip_address TEXT,
-                source TEXT,
-                discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE,
-                UNIQUE(workspace_id, domain, subdomain)
-            )
-        ''')
-        
-        # Create OSINT IPs table (with workspace_id)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS osint_ips (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                workspace_id INTEGER NOT NULL,
-                domain TEXT NOT NULL,
-                ip_address TEXT NOT NULL,
-                source TEXT,
-                discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (workspace_id) REFERENCES workspaces (id) ON DELETE CASCADE,
-                UNIQUE(workspace_id, domain, ip_address)
-            )
-        ''')
-        
-        # Create indexes for better performance
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_workspaces_name ON workspaces(name)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_workspaces_active ON workspaces(is_active)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_hosts_workspace ON hosts(workspace_id)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_hosts_ip ON hosts(ip_address)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_ports_host ON ports(host_id)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_web_host ON web_findings(host_id)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_sessions_workspace ON scan_sessions(workspace_id)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_sessions_module ON scan_sessions(module_name)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_osint_emails_workspace ON osint_emails(workspace_id)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_osint_emails_domain ON osint_emails(domain)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_osint_subdomains_workspace ON osint_subdomains(workspace_id)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_osint_subdomains_domain ON osint_subdomains(domain)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_osint_ips_workspace ON osint_ips(workspace_id)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_osint_ips_domain ON osint_ips(domain)')
+        cursor.execute("""
+            INSERT INTO workspaces (name, description, target, is_active)
+            VALUES (?, ?, ?, 0)
+        """, (name, description, target))
         
         conn.commit()
         conn.close()
-        
-        print_success(f"Database initialized successfully: {DB_PATH}")
+        print_success(f"Workspace '{name}' created successfully.")
         return True
         
-    except sqlite3.Error as e:
-        print_error(f"Database initialization error: {e}")
+    except sqlite3.IntegrityError:
+        print_error(f"Workspace '{name}' already exists.")
         return False
     except Exception as e:
-        print_error(f"Unexpected error: {e}")
+        print_error(f"Failed to create workspace: {str(e)}")
         return False
-
-
-# ==================== WORKSPACE MANAGEMENT ====================
-
-def create_workspace(name, description=None, target=None):
-    """
-    Create a new workspace.
-    
-    Args:
-        name (str): Workspace name
-        description (str, optional): Workspace description
-        target (str, optional): Primary target (IP, domain, range)
-        
-    Returns:
-        int: Workspace ID if successful, None otherwise
-    """
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT INTO workspaces (name, description, target, created_at, last_used)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        ''', (name, description, target))
-        
-        workspace_id = cursor.lastrowid
-        
-        conn.commit()
-        conn.close()
-        
-        print_success(f"Workspace created: {name} (ID: {workspace_id})")
-        return workspace_id
-        
-    except sqlite3.IntegrityError:
-        print_error(f"Workspace '{name}' already exists!")
-        return None
-    except sqlite3.Error as e:
-        print_error(f"Workspace creation error: {e}")
-        return None
-
 
 def list_workspaces():
     """
     List all workspaces.
     
     Returns:
-        list: List of workspace dictionaries
+        list: List of workspace records
     """
     try:
         conn = get_connection()
         cursor = conn.cursor()
         
-        cursor.execute('''
-            SELECT 
-                w.id, 
-                w.name, 
-                w.description, 
-                w.target,
-                w.created_at,
-                w.last_used,
-                w.is_active,
-                COUNT(DISTINCT h.id) as host_count,
-                COUNT(DISTINCT p.id) as port_count,
-                COUNT(DISTINCT wf.id) as web_finding_count
-            FROM workspaces w
-            LEFT JOIN hosts h ON w.id = h.workspace_id
-            LEFT JOIN ports p ON h.id = p.host_id
-            LEFT JOIN web_findings wf ON h.id = wf.host_id
-            GROUP BY w.id
-            ORDER BY w.last_used DESC
-        ''')
+        cursor.execute("""
+            SELECT id, name, description, target, is_active
+            FROM workspaces
+            ORDER BY is_active DESC, name ASC
+        """)
         
-        workspaces = []
-        for row in cursor.fetchall():
-            workspaces.append({
-                'id': row[0],
-                'name': row[1],
-                'description': row[2],
-                'target': row[3],
-                'created_at': row[4],
-                'last_used': row[5],
-                'is_active': row[6],
-                'host_count': row[7],
-                'port_count': row[8],
-                'web_finding_count': row[9]
-            })
-        
+        workspaces = cursor.fetchall()
         conn.close()
         return workspaces
         
-    except sqlite3.Error as e:
-        print_error(f"Workspace listing error: {e}")
+    except Exception as e:
+        print_error(f"Failed to list workspaces: {str(e)}")
         return []
 
-
-def set_active_workspace(workspace_id):
+def set_active_workspace(workspace_id: int) -> bool:
     """
-    Set a workspace as active and deactivate others.
+    Set a workspace as active and deactivate all others.
     
     Args:
-        workspace_id (int): ID of the workspace to activate
+        workspace_id: ID of the workspace to activate
         
     Returns:
         bool: True if successful, False otherwise
@@ -357,73 +243,59 @@ def set_active_workspace(workspace_id):
         cursor = conn.cursor()
         
         # Deactivate all workspaces
-        cursor.execute('UPDATE workspaces SET is_active = 0')
+        cursor.execute("UPDATE workspaces SET is_active = 0")
         
-        # Activate the selected workspace
-        cursor.execute('''
-            UPDATE workspaces 
-            SET is_active = 1, last_used = CURRENT_TIMESTAMP 
-            WHERE id = ?
-        ''', (workspace_id,))
+        # Activate the specified workspace
+        cursor.execute("""
+            UPDATE workspaces SET is_active = 1 WHERE id = ?
+        """, (workspace_id,))
         
         if cursor.rowcount == 0:
-            print_error(f"Workspace not found: ID {workspace_id}")
+            print_error(f"Workspace with ID {workspace_id} not found.")
             conn.close()
             return False
         
         conn.commit()
         conn.close()
-        
+        print_success(f"Workspace {workspace_id} activated.")
         return True
         
-    except sqlite3.Error as e:
-        print_error(f"Workspace activation error: {e}")
+    except Exception as e:
+        print_error(f"Failed to set active workspace: {str(e)}")
         return False
-
 
 def get_active_workspace():
     """
     Get the currently active workspace.
     
     Returns:
-        dict: Active workspace info, or None if no active workspace
+        sqlite3.Row or None: Active workspace record or None
     """
     try:
         conn = get_connection()
         cursor = conn.cursor()
         
-        cursor.execute('''
-            SELECT id, name, description, target, created_at, last_used
+        cursor.execute("""
+            SELECT id, name, description, target, is_active
             FROM workspaces
             WHERE is_active = 1
             LIMIT 1
-        ''')
+        """)
         
-        row = cursor.fetchone()
+        workspace = cursor.fetchone()
         conn.close()
+        return workspace
         
-        if row:
-            return {
-                'id': row[0],
-                'name': row[1],
-                'description': row[2],
-                'target': row[3],
-                'created_at': row[4],
-                'last_used': row[5]
-            }
-        return None
-        
-    except sqlite3.Error as e:
-        print_error(f"Active workspace query error: {e}")
+    except Exception as e:
+        print_error(f"Failed to get active workspace: {str(e)}")
         return None
 
-
-def delete_workspace(workspace_id):
+def delete_workspace(workspace_id: int) -> bool:
     """
-    Delete a workspace and all its data (CASCADE).
+    Delete a workspace and all associated data.
     
     Args:
-        workspace_id (int): ID of the workspace to delete
+        workspace_id: ID of the workspace to delete
         
     Returns:
         bool: True if successful, False otherwise
@@ -432,85 +304,75 @@ def delete_workspace(workspace_id):
         conn = get_connection()
         cursor = conn.cursor()
         
-        cursor.execute('DELETE FROM workspaces WHERE id = ?', (workspace_id,))
+        cursor.execute("DELETE FROM workspaces WHERE id = ?", (workspace_id,))
         
         if cursor.rowcount == 0:
-            print_error(f"Workspace not found: ID {workspace_id}")
+            print_error(f"Workspace with ID {workspace_id} not found.")
             conn.close()
             return False
         
         conn.commit()
         conn.close()
-        
-        print_success(f"Workspace deleted: ID {workspace_id}")
+        print_success(f"Workspace {workspace_id} deleted successfully.")
         return True
         
-    except sqlite3.Error as e:
-        print_error(f"Workspace deletion error: {e}")
+    except Exception as e:
+        print_error(f"Failed to delete workspace: {str(e)}")
         return False
 
+# ==================== Data Insertion Functions ====================
 
-# ==================== HOST MANAGEMENT ====================
-
-def add_host(ip_address, hostname=None, workspace_id=None):
+def add_host(ip_address: str, hostname: str = None) -> int:
     """
-    Add or update a host in the database.
+    Add a host to the active workspace.
     
     Args:
-        ip_address (str): IP address of the host
-        hostname (str, optional): Hostname if available
-        workspace_id (int, optional): Workspace ID (uses active if not provided)
+        ip_address: IP address of the host
+        hostname: Hostname (optional)
         
     Returns:
-        int: Host ID if successful, None otherwise
+        int: Host ID or -1 if failed
     """
     try:
-        # Get active workspace if not provided
-        if workspace_id is None:
-            active_ws = get_active_workspace()
-            if not active_ws:
-                print_error("No active workspace! Please select a workspace.")
-                return None
-            workspace_id = active_ws['id']
+        workspace = get_active_workspace()
+        if not workspace:
+            print_error("No active workspace. Please activate a workspace first.")
+            return -1
         
         conn = get_connection()
         cursor = conn.cursor()
         
-        # Try to insert, if exists update last_seen
-        cursor.execute('''
-            INSERT INTO hosts (workspace_id, ip_address, hostname, first_seen, last_seen)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        cursor.execute("""
+            INSERT INTO hosts (workspace_id, ip_address, hostname)
+            VALUES (?, ?, ?)
             ON CONFLICT(workspace_id, ip_address) DO UPDATE SET
-                hostname = COALESCE(excluded.hostname, hostname),
-                last_seen = CURRENT_TIMESTAMP
-        ''', (workspace_id, ip_address, hostname))
+                hostname = COALESCE(excluded.hostname, hostname)
+        """, (workspace['id'], ip_address, hostname))
         
         # Get the host ID
-        cursor.execute('SELECT id FROM hosts WHERE workspace_id = ? AND ip_address = ?', (workspace_id, ip_address))
-        host_id = cursor.fetchone()[0]
+        cursor.execute("""
+            SELECT id FROM hosts WHERE workspace_id = ? AND ip_address = ?
+        """, (workspace['id'], ip_address))
+        
+        host_id = cursor.fetchone()['id']
         
         conn.commit()
         conn.close()
-        
         return host_id
         
-    except sqlite3.Error as e:
-        print_error(f"Host addition error: {e}")
-        return None
+    except Exception as e:
+        print_error(f"Failed to add host: {str(e)}")
+        return -1
 
-
-
-
-
-def add_port(host_id, port, protocol, service=None):
+def add_port(host_id: int, port: int, protocol: str, service: str = None) -> bool:
     """
-    Add a port to the database for a specific host.
+    Add a port to a host.
     
     Args:
-        host_id (int): ID of the host
-        port (int): Port number
-        protocol (str): Protocol (tcp/udp)
-        service (str, optional): Service name
+        host_id: ID of the host
+        port: Port number
+        protocol: Protocol (tcp/udp)
+        service: Service name (optional)
         
     Returns:
         bool: True if successful, False otherwise
@@ -519,30 +381,30 @@ def add_port(host_id, port, protocol, service=None):
         conn = get_connection()
         cursor = conn.cursor()
         
-        cursor.execute('''
-            INSERT OR IGNORE INTO ports (host_id, port, protocol, service)
+        cursor.execute("""
+            INSERT INTO ports (host_id, port, protocol, service)
             VALUES (?, ?, ?, ?)
-        ''', (host_id, port, protocol, service))
+            ON CONFLICT(host_id, port, protocol) DO UPDATE SET
+                service = COALESCE(excluded.service, service)
+        """, (host_id, port, protocol, service))
         
         conn.commit()
         conn.close()
-        
         return True
         
-    except sqlite3.Error as e:
-        print_error(f"Port addition error: {e}")
+    except Exception as e:
+        print_error(f"Failed to add port: {str(e)}")
         return False
 
-
-def add_web_finding(host_id, url, found_path, status_code=None):
+def add_web_finding(host_id: int, url: str, found_path: str, status_code: int = None) -> bool:
     """
-    Add a web finding (discovered directory/file) to the database.
+    Add a web finding to a host.
     
     Args:
-        host_id (int): ID of the host
-        url (str): Base URL
-        found_path (str): Discovered path
-        status_code (int, optional): HTTP status code
+        host_id: ID of the host
+        url: Base URL
+        found_path: Found path/directory
+        status_code: HTTP status code (optional)
         
     Returns:
         bool: True if successful, False otherwise
@@ -551,494 +413,206 @@ def add_web_finding(host_id, url, found_path, status_code=None):
         conn = get_connection()
         cursor = conn.cursor()
         
-        cursor.execute('''
-            INSERT OR IGNORE INTO web_findings (host_id, url, found_path, status_code)
+        cursor.execute("""
+            INSERT INTO web_findings (host_id, url, found_path, status_code)
             VALUES (?, ?, ?, ?)
-        ''', (host_id, url, found_path, status_code))
+            ON CONFLICT(host_id, url, found_path) DO UPDATE SET
+                status_code = COALESCE(excluded.status_code, status_code)
+        """, (host_id, url, found_path, status_code))
         
         conn.commit()
         conn.close()
-        
         return True
         
-    except sqlite3.Error as e:
-        print_error(f"Web finding addition error: {e}")
+    except Exception as e:
+        print_error(f"Failed to add web finding: {str(e)}")
         return False
 
-
-def create_scan_session(module_name, target, tool_name=None):
+def add_osint_email(domain: str, email: str, source: str = None) -> bool:
     """
-    Create a new scan session record.
+    Add an OSINT email finding to the active workspace.
     
     Args:
-        module_name (str): Name of the module (wifi/network/web)
-        target (str): Scan target (IP, URL, etc.)
-        tool_name (str, optional): Tool used for scanning
-        
-    Returns:
-        int: Session ID if successful, None otherwise
-    """
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT INTO scan_sessions (module_name, target, tool_name)
-            VALUES (?, ?, ?)
-        ''', (module_name, target, tool_name))
-        
-        session_id = cursor.lastrowid
-        
-        conn.commit()
-        conn.close()
-        
-        return session_id
-        
-    except sqlite3.Error as e:
-        print_error(f"Scan session creation error: {e}")
-        return None
-
-
-def update_scan_session(session_id, status='completed', results_count=0):
-    """
-    Update a scan session with completion info.
-    
-    Args:
-        session_id (int): ID of the session
-        status (str): Session status (completed/failed/cancelled)
-        results_count (int): Number of results found
+        domain: Domain name
+        email: Email address
+        source: Source of the finding (optional)
         
     Returns:
         bool: True if successful, False otherwise
     """
     try:
+        workspace = get_active_workspace()
+        if not workspace:
+            print_error("No active workspace. Please activate a workspace first.")
+            return False
+        
         conn = get_connection()
         cursor = conn.cursor()
         
-        cursor.execute('''
-            UPDATE scan_sessions
-            SET completed_at = CURRENT_TIMESTAMP,
-                status = ?,
-                results_count = ?
-            WHERE id = ?
-        ''', (status, results_count, session_id))
+        cursor.execute("""
+            INSERT OR IGNORE INTO osint_emails (workspace_id, domain, email, source)
+            VALUES (?, ?, ?, ?)
+        """, (workspace['id'], domain, email, source))
         
         conn.commit()
         conn.close()
-        
         return True
         
-    except sqlite3.Error as e:
-        print_error(f"Scan session update error: {e}")
+    except Exception as e:
+        print_error(f"Failed to add OSINT email: {str(e)}")
         return False
 
-
-def get_host_by_ip(ip_address):
+def add_osint_subdomain(domain: str, subdomain: str, ip_address: str = None) -> bool:
     """
-    Get host information by IP address.
+    Add an OSINT subdomain finding to the active workspace.
     
     Args:
-        ip_address (str): IP address to lookup
+        domain: Parent domain
+        subdomain: Subdomain
+        ip_address: IP address (optional)
         
     Returns:
-        dict: Host information or None if not found
+        bool: True if successful, False otherwise
     """
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT * FROM hosts WHERE ip_address = ?', (ip_address,))
-        row = cursor.fetchone()
-        
-        conn.close()
-        
-        if row:
-            return dict(row)
-        return None
-        
-    except sqlite3.Error as e:
-        print_error(f"Host query error: {e}")
-        return None
-
-
-def get_ports_by_host(host_id):
-    """
-    Get all ports for a specific host.
-    
-    Args:
-        host_id (int): ID of the host
-        
-    Returns:
-        list: List of port dictionaries
-    """
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT * FROM ports
-            WHERE host_id = ?
-            ORDER BY port
-        ''', (host_id,))
-        
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return [dict(row) for row in rows]
-        
-    except sqlite3.Error as e:
-        print_error(f"Port query error: {e}")
-        return []
-
-
-def get_web_findings_by_host(host_id):
-    """
-    Get all web findings for a specific host.
-    
-    Args:
-        host_id (int): ID of the host
-        
-    Returns:
-        list: List of web finding dictionaries
-    """
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT * FROM web_findings
-            WHERE host_id = ?
-            ORDER BY discovered_at DESC
-        ''', (host_id,))
-        
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return [dict(row) for row in rows]
-        
-    except sqlite3.Error as e:
-        print_error(f"Web findings query error: {e}")
-        return []
-
-
-def get_all_hosts():
-    """
-    Get all hosts from the database.
-    
-    Returns:
-        list: List of host dictionaries
-    """
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT * FROM hosts ORDER BY last_seen DESC')
-        rows = cursor.fetchall()
-        
-        conn.close()
-        
-        return [dict(row) for row in rows]
-        
-    except sqlite3.Error as e:
-        print_error(f"Host list query error: {e}")
-        return []
-
-
-def get_scan_history(module_name=None, limit=10):
-    """
-    Get scan session history.
-    
-    Args:
-        module_name (str, optional): Filter by module name
-        limit (int): Maximum number of results
-        
-    Returns:
-        list: List of scan session dictionaries
-    """
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        if module_name:
-            cursor.execute('''
-                SELECT * FROM scan_sessions
-                WHERE module_name = ?
-                ORDER BY started_at DESC
-                LIMIT ?
-            ''', (module_name, limit))
-        else:
-            cursor.execute('''
-                SELECT * FROM scan_sessions
-                ORDER BY started_at DESC
-                LIMIT ?
-            ''', (limit,))
-        
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return [dict(row) for row in rows]
-        
-    except sqlite3.Error as e:
-        print_error(f"Scan history query error: {e}")
-        return []
-
-
-def get_database_stats():
-    """
-    Get database statistics (counts of hosts, ports, findings).
-    
-    Returns:
-        dict: Statistics dictionary
-    """
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        stats = {}
-        
-        # Count hosts
-        cursor.execute('SELECT COUNT(*) FROM hosts')
-        stats['total_hosts'] = cursor.fetchone()[0]
-        
-        # Count ports
-        cursor.execute('SELECT COUNT(*) FROM ports')
-        stats['total_ports'] = cursor.fetchone()[0]
-        
-        # Count web findings
-        cursor.execute('SELECT COUNT(*) FROM web_findings')
-        stats['total_web_findings'] = cursor.fetchone()[0]
-        
-        # Count scan sessions
-        cursor.execute('SELECT COUNT(*) FROM scan_sessions')
-        stats['total_scans'] = cursor.fetchone()[0]
-        
-        # Most recent scan
-        cursor.execute('SELECT started_at FROM scan_sessions ORDER BY started_at DESC LIMIT 1')
-        row = cursor.fetchone()
-        stats['last_scan'] = row[0] if row else None
-        
-        conn.close()
-        
-        return stats
-        
-    except sqlite3.Error as e:
-        print_error(f"Statistics query error: {e}")
-        return {}
-
-
-def add_osint_email(domain, email, source=None, workspace_id=None):
-    """
-    Add an email address found during OSINT.
-    
-    Args:
-        domain (str): Target domain
-        email (str): Email address found
-        source (str, optional): Source where it was found
-        workspace_id (int, optional): Workspace ID (uses active if not provided)
-        
-    Returns:
-        int: Email ID if successful, None otherwise
-    """
-    try:
-        # Get active workspace if not provided
-        if workspace_id is None:
-            active_ws = get_active_workspace()
-            if not active_ws:
-                print_error("No active workspace!")
-                return None
-            workspace_id = active_ws['id']
+        workspace = get_active_workspace()
+        if not workspace:
+            print_error("No active workspace. Please activate a workspace first.")
+            return False
         
         conn = get_connection()
         cursor = conn.cursor()
         
-        cursor.execute('''
-            INSERT INTO osint_emails (workspace_id, domain, email, source, discovered_at)
-            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(workspace_id, domain, email) DO UPDATE SET
-                discovered_at = CURRENT_TIMESTAMP
-        ''', (workspace_id, domain, email, source))
-        
-        email_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        
-        return email_id
-        
-    except sqlite3.Error as e:
-        print_error(f"Email save error: {e}")
-        return None
-
-
-def add_osint_subdomain(domain, subdomain, ip_address=None, source=None, workspace_id=None):
-    """
-    Add a subdomain found during OSINT.
-    
-    Args:
-        domain (str): Target domain
-        subdomain (str): Subdomain found
-        ip_address (str, optional): IP address of subdomain
-        source (str, optional): Source where it was found
-        workspace_id (int, optional): Workspace ID (uses active if not provided)
-        
-    Returns:
-        int: Subdomain ID if successful, None otherwise
-    """
-    try:
-        # Get active workspace if not provided
-        if workspace_id is None:
-            active_ws = get_active_workspace()
-            if not active_ws:
-                print_error("No active workspace!")
-                return None
-            workspace_id = active_ws['id']
-        
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT INTO osint_subdomains (workspace_id, domain, subdomain, ip_address, source, discovered_at)
-            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        cursor.execute("""
+            INSERT INTO osint_subdomains (workspace_id, domain, subdomain, ip_address)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(workspace_id, domain, subdomain) DO UPDATE SET
-                ip_address = COALESCE(?, ip_address),
-                discovered_at = CURRENT_TIMESTAMP
-        ''', (workspace_id, domain, subdomain, ip_address, source, ip_address))
+                ip_address = COALESCE(excluded.ip_address, ip_address)
+        """, (workspace['id'], domain, subdomain, ip_address))
         
-        subdomain_id = cursor.lastrowid
         conn.commit()
         conn.close()
+        return True
         
-        return subdomain_id
-        
-    except sqlite3.Error as e:
-        print_error(f"Subdomain save error: {e}")
-        return None
+    except Exception as e:
+        print_error(f"Failed to add OSINT subdomain: {str(e)}")
+        return False
 
-
-def add_osint_ip(domain, ip_address, source=None, workspace_id=None):
+def add_osint_ip(ip_address: str, location: str = None, organization: str = None) -> bool:
     """
-    Add an IP address found during OSINT.
+    Add an OSINT IP finding to the active workspace.
     
     Args:
-        domain (str): Target domain
-        ip_address (str): IP address found
-        source (str, optional): Source where it was found
-        workspace_id (int, optional): Workspace ID (uses active if not provided)
+        ip_address: IP address
+        location: Location information (optional)
+        organization: Organization information (optional)
         
     Returns:
-        int: IP ID if successful, None otherwise
+        bool: True if successful, False otherwise
     """
     try:
-        # Get active workspace if not provided
-        if workspace_id is None:
-            active_ws = get_active_workspace()
-            if not active_ws:
-                print_error("No active workspace!")
-                return None
-            workspace_id = active_ws['id']
+        workspace = get_active_workspace()
+        if not workspace:
+            print_error("No active workspace. Please activate a workspace first.")
+            return False
         
         conn = get_connection()
         cursor = conn.cursor()
         
-        cursor.execute('''
-            INSERT INTO osint_ips (workspace_id, domain, ip_address, source, discovered_at)
-            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(workspace_id, domain, ip_address) DO UPDATE SET
-                discovered_at = CURRENT_TIMESTAMP
-        ''', (workspace_id, domain, ip_address, source))
+        cursor.execute("""
+            INSERT INTO osint_ips (workspace_id, ip_address, location, organization)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(workspace_id, ip_address) DO UPDATE SET
+                location = COALESCE(excluded.location, location),
+                organization = COALESCE(excluded.organization, organization)
+        """, (workspace['id'], ip_address, location, organization))
         
-        ip_id = cursor.lastrowid
         conn.commit()
         conn.close()
+        return True
         
-        return ip_id
-        
-    except sqlite3.Error as e:
-        print_error(f"IP save error: {e}")
-        return None
+    except Exception as e:
+        print_error(f"Failed to add OSINT IP: {str(e)}")
+        return False
 
 
-
-
-
-def get_osint_results(domain):
+def add_vulnerability(host_id: int, port: int, cve: str, description: str, severity: str = None) -> bool:
     """
-    Get all OSINT results for a domain.
+    Add a vulnerability finding to a host.
     
     Args:
-        domain (str): Target domain
+        host_id: ID of the host
+        port: Port number where vulnerability was found (None for host-level)
+        cve: CVE identifier (e.g., CVE-2021-1234)
+        description: Vulnerability description
+        severity: Severity level (optional: critical, high, medium, low)
         
     Returns:
-        dict: Dictionary with emails, subdomains, and IPs
+        bool: True if successful, False otherwise
     """
     try:
         conn = get_connection()
         cursor = conn.cursor()
         
-        results = {
-            'emails': [],
-            'subdomains': [],
-            'ips': []
-        }
+        cursor.execute("""
+            INSERT INTO vulnerabilities (host_id, port, cve, description, severity)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(host_id, port, cve) DO UPDATE SET
+                description = excluded.description,
+                severity = COALESCE(excluded.severity, severity)
+        """, (host_id, port, cve, description, severity))
         
-        # Get emails
-        cursor.execute('''
-            SELECT email, source, discovered_at
-            FROM osint_emails
-            WHERE domain = ?
-            ORDER BY discovered_at DESC
-        ''', (domain,))
-        results['emails'] = [dict(row) for row in cursor.fetchall()]
-        
-        # Get subdomains
-        cursor.execute('''
-            SELECT subdomain, ip_address, source, discovered_at
-            FROM osint_subdomains
-            WHERE domain = ?
-            ORDER BY discovered_at DESC
-        ''', (domain,))
-        results['subdomains'] = [dict(row) for row in cursor.fetchall()]
-        
-        # Get IPs
-        cursor.execute('''
-            SELECT ip_address, source, discovered_at
-            FROM osint_ips
-            WHERE domain = ?
-            ORDER BY discovered_at DESC
-        ''', (domain,))
-        results['ips'] = [dict(row) for row in cursor.fetchall()]
-        
+        conn.commit()
         conn.close()
-        return results
+        return True
         
-    except sqlite3.Error as e:
-        print_error(f"OSINT results query error: {e}")
-        return {'emails': [], 'subdomains': [], 'ips': []}
+    except Exception as e:
+        print_error(f"Failed to add vulnerability: {str(e)}")
+        return False
 
 
-if __name__ == "__main__":
-    # Test the database module
-    print_info("Testing database module...")
+def get_vulnerabilities(host_id: int = None) -> list:
+    """
+    Get vulnerabilities for a specific host or all hosts in active workspace.
     
-    # Initialize database
-    if initialize_database():
-        print_success("Database initialized!")
+    Args:
+        host_id: ID of the host (None for all hosts in workspace)
         
-        # Test adding a host
-        host_id = add_host("192.168.1.1", "router.local")
+    Returns:
+        list: List of vulnerability records
+    """
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
         if host_id:
-            print_success(f"Host added, ID: {host_id}")
+            # Get vulnerabilities for specific host
+            cursor.execute("""
+                SELECT v.*, h.ip_address, h.hostname
+                FROM vulnerabilities v
+                JOIN hosts h ON v.host_id = h.id
+                WHERE v.host_id = ?
+                ORDER BY v.severity DESC, v.cve
+            """, (host_id,))
+        else:
+            # Get vulnerabilities for all hosts in active workspace
+            workspace = get_active_workspace()
+            if not workspace:
+                return []
             
-            # Test adding ports
-            add_port(host_id, 22, "tcp", "ssh")
-            add_port(host_id, 80, "tcp", "http")
-            print_success("Ports added!")
-            
-            # Test adding web finding
-            add_web_finding(host_id, "http://192.168.1.1", "/admin", 200)
-            print_success("Web finding added!")
-            
-            # Get stats
-            stats = get_database_stats()
-            print_info(f"Statistics: {stats}")
-    else:
-        print_error("Database initialization failed!")
+            cursor.execute("""
+                SELECT v.*, h.ip_address, h.hostname
+                FROM vulnerabilities v
+                JOIN hosts h ON v.host_id = h.id
+                WHERE h.workspace_id = ?
+                ORDER BY h.ip_address, v.port, v.severity DESC
+            """, (workspace['id'],))
+        
+        vulnerabilities = cursor.fetchall()
+        conn.close()
+        return vulnerabilities
+        
+    except Exception as e:
+        print_error(f"Failed to retrieve vulnerabilities: {str(e)}")
+        return []
+

@@ -1,15 +1,4 @@
-# FOU4 - Forensic Utility Tool
-# Requirements for Python dependencies
+rich>=13.0.0
+pytest>=7.0.0
+pytest-cov>=4.0.0
 
-# Required packages
-rich>=13.0.0          # Enhanced terminal UI with colors, tables, and panels
-
-# Future enhancements (currently not required but recommended):
-# python-nmap>=0.7.1    # Python wrapper for Nmap
-# scapy>=2.5.0          # Packet manipulation and analysis
-# colorama>=0.4.6       # Cross-platform colored terminal text (fallback for rich)
-# requests>=2.31.0      # HTTP library for web-based features
-
-# Note: This project primarily uses system tools (nmap, aircrack-ng, etc.)
-# and Python standard library. Additional packages above are optional
-# and can enhance functionality.

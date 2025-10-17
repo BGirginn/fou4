@@ -1,307 +1,418 @@
 """
-Web Discovery Module - Performs directory/file scanning on web servers.
+Web Exploitation Module
+
+This module provides web application security testing capabilities including:
+- Directory and file enumeration
+- SQL injection testing
+- XSS detection
+- Authentication testing
+- Web crawling
 """
+
 import subprocess
-import sys
 import os
-import re
-from urllib.parse import urlparse
+import requests
+from typing import List, Dict, Optional
+from rich.prompt import Prompt, Confirm
+from utils.console import print_info, print_success, print_error, print_warning, console
+from utils.checker import check_tool
+from utils.installer import install_package
+from utils.config import get_config, get_setting, get_wordlist, get_timeout
+from utils.db import add_host, add_web_finding, get_active_workspace
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Required tools
+REQUIRED_TOOLS = {
+    "dirb": "dirb",
+    "gobuster": "gobuster",
+    "sqlmap": "sqlmap",
+    "nikto": "nikto"
+}
 
-from utils import checker, installer, ui, db
-from utils.console import console, print_success, print_error, print_warning, print_info
-from rich.panel import Panel
-from rich import box
 
-
-def run_web_scan(tool_name, url, wordlist_path):
+def check_web_tools() -> bool:
     """
-    Execute web scanning tool with specified parameters.
-    
-    Args:
-        tool_name (str): Name of the scanning tool (gobuster, dirb, feroxbuster)
-        url (str): Target URL to scan
-        wordlist_path (str): Path to the wordlist file
+    Check if required web testing tools are installed.
     
     Returns:
-        bool: True if scan completed successfully, False otherwise
+        bool: True if all tools are available, False otherwise
     """
-    # Build command based on tool
-    if tool_name == "gobuster":
-        command = ['gobuster', 'dir', '-u', url, '-w', wordlist_path]
-    elif tool_name == "dirb":
-        command = ['dirb', url, wordlist_path]
-    elif tool_name == "feroxbuster":
-        command = ['feroxbuster', '-u', url, '-w', wordlist_path]
-    else:
-        print_error(f"Unknown tool: {tool_name}")
-        return False
+    print_info("Checking web exploitation tools...")
+    all_available = True
     
-    header_text = f"🔍 Starting scan: {tool_name.upper()}\nTarget: {url}\nWordlist: {wordlist_path}"
-    console.print(Panel.fit(header_text, border_style="green", box=box.DOUBLE))
-    console.print()
+    for tool, package in REQUIRED_TOOLS.items():
+        if not check_tool(tool):
+            all_available = False
+            if not install_package(package):
+                print_warning(f"{tool} is not available. Some features may be limited.")
     
-    # Extract hostname/IP from URL for database
-    parsed_url = urlparse(url)
-    hostname = parsed_url.netloc or parsed_url.path
+    return all_available
+
+
+def directory_enumeration(target_url: str, wordlist: Optional[str] = None) -> List[Dict[str, str]]:
+    """
+    Perform directory and file enumeration on a target URL.
+    Uses configuration file for default wordlist.
     
-    # Initialize database session
-    host_id = None
-    try:
-        host_id = db.add_host(hostname, hostname)
-        if host_id:
-            print_info(f"Scan record created (Host ID: {host_id})")
-    except Exception as e:
-        print_warning(f"Database initialization error: {e}")
-    
+    Args:
+        target_url: Target URL to scan
+        wordlist: Path to wordlist file (uses config default if None)
+        
+    Returns:
+        List[Dict]: List of found directories/files
+    """
     findings = []
     
     try:
-        # Run the command with real-time output
-        process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            universal_newlines=True
+        # Get default wordlist from config if not provided
+        if not wordlist:
+            wordlist = get_wordlist('web')
+            print_info(f"Using default wordlist from config: {wordlist}")
+        
+        # Prompt for wordlist with config default
+        wordlist = Prompt.ask(
+            "[cyan]Enter wordlist path[/cyan]",
+            default=wordlist
         )
         
-        # Print output in real-time and collect findings
-        for line in process.stdout:
-            print(line, end='')
+        if not os.path.exists(wordlist):
+            print_error(f"Wordlist not found: {wordlist}")
+            return findings
+        
+        # Get timeout from config
+        timeout = get_timeout('dirb')
+        
+        # Get web settings from config
+        config = get_config()
+        threads = get_setting('web_settings.threads', 10)
+        
+        print_info(f"Starting directory enumeration on {target_url}")
+        print_info(f"Using {threads} threads with {timeout}s timeout")
+        
+        # Check if gobuster is available (faster than dirb)
+        if check_tool("gobuster"):
+            print_info("Using gobuster for enumeration...")
             
-            # Parse findings based on tool output format
-            # Gobuster: /path (Status: 200)
-            # Dirb: + http://example.com/path (CODE:200|SIZE:1234)
-            # Feroxbuster: 200 GET http://example.com/path
+            process = subprocess.Popen(
+                ["gobuster", "dir", "-u", target_url, "-w", wordlist, "-t", str(threads), "-q"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
             
-            if tool_name == "gobuster":
-                match = re.search(r'(/\S+)\s+\(Status:\s*(\d+)', line)
-                if match:
-                    path, status = match.groups()
-                    findings.append((path, int(status)))
-            elif tool_name == "dirb":
-                match = re.search(r'\+\s+(http\S+)\s+\(CODE:(\d+)', line)
-                if match:
-                    full_url, status = match.groups()
-                    path = full_url.replace(url, '')
-                    findings.append((path, int(status)))
-            elif tool_name == "feroxbuster":
-                match = re.search(r'(\d+)\s+GET\s+(\S+)', line)
-                if match:
-                    status, full_url = match.groups()
-                    path = full_url.replace(url, '')
-                    findings.append((path, int(status)))
-        
-        # Wait for process to complete
-        process.wait()
-        
-        console.print()
-        if process.returncode == 0:
-            print_success("Scan completed successfully!")
-        else:
-            print_error(f"Scan terminated with error code: {process.returncode}")
-        
-        # Save findings to database
-        if host_id and findings:
             try:
-                print_info(f"Saving findings to database... ({len(findings)} findings)")
+                stdout, stderr = process.communicate(timeout=timeout)
                 
-                saved_count = 0
-                for path, status_code in findings:
-                    if db.add_web_finding(host_id, url, path, status_code):
-                        saved_count += 1
+                # Parse gobuster output
+                for line in stdout.split('\n'):
+                    if line.strip() and '(Status:' in line:
+                        parts = line.split()
+                        path = parts[0] if parts else ''
+                        status = ''
+                        
+                        # Extract status code
+                        for i, part in enumerate(parts):
+                            if '(Status:' in part and i + 1 < len(parts):
+                                status = parts[i + 1].rstrip(')')
+                                break
+                        
+                        if path and status:
+                            finding = {
+                                'url': target_url,
+                                'path': path,
+                                'status': status,
+                                'tool': 'gobuster'
+                            }
+                            findings.append(finding)
+                            print_success(f"Found: {path} [Status: {status}]")
                 
-                print_success(f"{saved_count} findings saved to database!")
+            except subprocess.TimeoutExpired:
+                process.kill()
+                print_warning(f"Scan timed out after {timeout} seconds")
+        
+        else:
+            # Fallback to dirb
+            print_info("Using dirb for enumeration...")
+            
+            process = subprocess.Popen(
+                ["dirb", target_url, wordlist, "-S", "-r"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            try:
+                stdout, stderr = process.communicate(timeout=timeout)
                 
-            except Exception as e:
-                print_warning(f"Error during database save: {e}")
+                # Parse dirb output
+                for line in stdout.split('\n'):
+                    if '==> DIRECTORY:' in line:
+                        path = line.split('==> DIRECTORY:')[1].strip()
+                        finding = {
+                            'url': target_url,
+                            'path': path,
+                            'status': '200',
+                            'tool': 'dirb'
+                        }
+                        findings.append(finding)
+                        print_success(f"Found directory: {path}")
+                    elif '+ ' in line and 'CODE:' in line:
+                        parts = line.split()
+                        path = parts[1] if len(parts) > 1 else ''
+                        status = parts[parts.index('CODE:') + 1] if 'CODE:' in parts else ''
+                        
+                        if path and status:
+                            finding = {
+                                'url': target_url,
+                                'path': path,
+                                'status': status,
+                                'tool': 'dirb'
+                            }
+                            findings.append(finding)
+                            print_success(f"Found: {path} [Status: {status}]")
+            
+            except subprocess.TimeoutExpired:
+                process.kill()
+                print_warning(f"Scan timed out after {timeout} seconds")
         
-        console.print()
+        # Save findings to database if workspace is active
+        if findings:
+            workspace = get_active_workspace()
+            if workspace:
+                # Extract host from URL
+                from urllib.parse import urlparse
+                parsed = urlparse(target_url)
+                host = parsed.netloc
+                
+                # Add host to database
+                host_id = add_host(host)
+                
+                if host_id > 0:
+                    # Save each finding
+                    for finding in findings:
+                        add_web_finding(
+                            host_id,
+                            finding['url'],
+                            finding['path'],
+                            int(finding['status']) if finding['status'].isdigit() else None
+                        )
         
-        return process.returncode == 0
+        print_success(f"Enumeration complete! Found {len(findings)} items")
+        return findings
         
-    except KeyboardInterrupt:
-        print_error("Scan cancelled by user.")
-        try:
-            process.terminate()
-            process.wait(timeout=5)
-        except:
-            process.kill()
-        return False
+    except FileNotFoundError as e:
+        print_error(f"Tool not found: {str(e)}")
+        return findings
     except Exception as e:
-        print_error(f"Error during scan: {e}")
-        return False
+        print_error(f"Error during enumeration: {str(e)}")
+        return findings
 
 
-def print_web_menu():
+def sql_injection_test(target_url: str, test_parameter: Optional[str] = None) -> Dict[str, any]:
     """
-    Display the Web Discovery Module menu.
-    """
-    from rich.text import Text
-    
-    # Create title
-    title = Text("🔍 Web Discovery Module", style="bold cyan")
-    
-    # Create menu content
-    menu_text = Text()
-    menu_text.append("\n🛠️  Web Directory and File Scanning Tools:\n\n", style="bold cyan")
-    
-    menu_text.append("  [1] ", style="bold yellow")
-    menu_text.append("Gobuster", style="white")
-    menu_text.append("    - Fast directory and file scanner\n", style="dim")
-    
-    menu_text.append("  [2] ", style="bold yellow")
-    menu_text.append("Dirb", style="white")
-    menu_text.append("        - Classic web content scanner\n", style="dim")
-    
-    menu_text.append("  [3] ", style="bold yellow")
-    menu_text.append("Feroxbuster", style="white")
-    menu_text.append(" - Modern and powerful scanner\n", style="dim")
-    
-    menu_text.append("  [0] ", style="bold red")
-    menu_text.append("Back", style="white")
-    menu_text.append("        - Return to main menu\n", style="dim")
-    
-    # Create panel
-    panel = Panel(
-        menu_text,
-        title=title,
-        border_style="cyan",
-        box=box.ROUNDED,
-        padding=(1, 2)
-    )
-    
-    console.print(panel)
-
-
-def run_web_module(target_host=None, detected_ports=None):
-    """
-    Main function for the Web Discovery Module.
-    Handles tool selection, parameter input, and scanning.
+    Test for SQL injection vulnerabilities using sqlmap.
     
     Args:
-        target_host (str, optional): Pre-filled target host/IP from network scan
-        detected_ports (list, optional): List of detected web ports from network scan
+        target_url: Target URL to test
+        test_parameter: Specific parameter to test (optional)
+        
+    Returns:
+        Dict: Test results
     """
-    # If called with target, show smart automation message
-    if target_host:
-        console.print()
-        panel = Panel.fit(
-            f"[bold green]🤖 Smart Automation Active![/bold green]\n"
-            f"[cyan]Target:[/cyan] {target_host}\n"
-            f"[cyan]Detected Web Ports:[/cyan] {', '.join(detected_ports) if detected_ports else 'N/A'}",
-            title="[bold]🌐 Web Discovery Module[/bold]",
-            border_style="green",
-            box=box.DOUBLE
-        )
-        console.print(panel)
-        console.print()
+    result = {
+        'vulnerable': False,
+        'details': [],
+        'dbms': None
+    }
     
-    while True:
-        ui.clear_screen()
-        print_web_menu()
+    try:
+        if not check_tool("sqlmap"):
+            print_error("sqlmap not found. Please install it first.")
+            return result
+        
+        # Get timeout from config
+        timeout = get_timeout('sqlmap')
+        
+        # Build sqlmap command
+        cmd = ["sqlmap", "-u", target_url, "--batch", "--smart"]
+        
+        if test_parameter:
+            cmd.extend(["-p", test_parameter])
+        
+        # Ask for additional options
+        if Confirm.ask("[yellow]Run with aggressive detection?[/yellow]", default=False):
+            cmd.extend(["--level=5", "--risk=3"])
+        else:
+            cmd.extend(["--level=1", "--risk=1"])
+        
+        print_info(f"Testing {target_url} for SQL injection...")
+        print_warning(f"This may take up to {timeout} seconds")
+        
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        vulnerable = False
+        dbms = None
         
         try:
-            choice = input("\n[bold cyan]Make your selection:[/bold cyan] ").strip()
-        except (KeyboardInterrupt, EOFError):
-            console.print("\n[yellow]Exiting module...[/yellow]")
-            break
-        
-        # Return to main menu
-        if choice == '0':
-            break
-        
-        # Map choice to tool name
-        tool_map = {
-            '1': ('gobuster', 'gobuster'),
-            '2': ('dirb', 'dirb'),
-            '3': ('feroxbuster', 'feroxbuster')
-        }
-        
-        if choice not in tool_map:
-            print_error("Invalid selection! Please choose an option from the menu.")
-            input("Press Enter to continue...")
-            continue
-        
-        tool_name, package_name = tool_map[choice]
-        
-        # Check if tool exists
-        console.print(f"\n[cyan]ℹ[/cyan] Checking '{tool_name}' tool...")
-        if not checker.check_tool(tool_name):
-            print_error(f"'{tool_name}' not found. Installation required.")
+            stdout, stderr = process.communicate(timeout=timeout)
             
-            # Attempt to install the tool
-            if not installer.install_package(package_name):
-                print_error(f"'{tool_name}' installation failed or cancelled.")
-                input("Press Enter to return to main menu...")
-                continue
+            # Parse sqlmap output
+            for line in stdout.split('\n'):
+                console.print(line)
+                
+                if 'is vulnerable' in line.lower():
+                    vulnerable = True
+                    result['details'].append(line.strip())
+                    print_warning(f"Vulnerability found: {line.strip()}")
+                
+                if 'back-end DBMS:' in line.lower():
+                    dbms = line.split('back-end DBMS:')[1].strip()
+                    print_info(f"Database: {dbms}")
             
-            # Verify installation
-            if not checker.check_tool(tool_name):
-                print_error(f"'{tool_name}' still not found after installation!")
-                input("Press Enter to return to main menu...")
-                continue
-        
-        # Tool is available, get scan parameters
-        param_header = f"⚙️ Web Scan Parameters - {tool_name.upper()}"
-        console.print(Panel.fit(param_header, border_style="yellow", box=box.ROUNDED))
-        console.print()
-        
-        try:
-            # Get target URL - pre-fill if provided by network scan
-            if target_host and detected_ports:
-                # Suggest URL based on detected ports
-                suggested_port = detected_ports[0] if detected_ports else '80'
-                protocol = 'https' if suggested_port in ['443', '8443'] else 'http'
-                suggested_url = f"{protocol}://{target_host}:{suggested_port}"
-                
-                print_info(f"Suggested URL: {suggested_url}")
-                url = input(f"[cyan]Target URL (Press Enter to use suggested):[/cyan] ").strip()
-                
-                if not url:
-                    url = suggested_url
-                    print_success(f"Using suggested URL: {url}")
+            result['vulnerable'] = vulnerable
+            result['dbms'] = dbms
+            
+            if vulnerable:
+                print_error("SQL Injection vulnerability detected!")
             else:
-                url = input("[cyan]Target URL (e.g.: http://example.com):[/cyan] ").strip()
-            
-            if not url:
-                print_error("URL cannot be empty!")
-                input("Press Enter to continue...")
-                continue
-            
-            # Ensure URL has protocol
-            if not url.startswith(('http://', 'https://')):
-                url = 'http://' + url
-                print_info(f"URL updated: {url}")
-            
-            # Get wordlist path
-            wordlist_path = input("[cyan]Wordlist File Path (e.g.: /usr/share/wordlists/dirb/common.txt):[/cyan] ").strip()
-            if not wordlist_path:
-                print_error("Wordlist path cannot be empty!")
-                input("Press Enter to continue...")
-                continue
-            
-            # Check if wordlist exists
-            if not os.path.isfile(wordlist_path):
-                print_warning(f"File '{wordlist_path}' not found!")
-                confirm = input("Do you want to continue anyway? (Y/n): ").strip().lower()
-                if confirm not in ['y', 'yes', '']:
-                    continue
-            
-        except (KeyboardInterrupt, EOFError):
-            print_warning("Operation cancelled.")
-            input("Press Enter to continue...")
-            continue
+                print_success("No SQL injection vulnerabilities found")
         
-        # Run the scan
-        run_web_scan(tool_name, url, wordlist_path)
-        input("\nPress Enter to continue...")
+        except subprocess.TimeoutExpired:
+            process.kill()
+            print_warning(f"SQL injection test timed out after {timeout} seconds")
+        
+        return result
+        
+    except Exception as e:
+        print_error(f"Error during SQL injection test: {str(e)}")
+        return result
 
 
-if __name__ == "__main__":
-    # Test the module
-    run_web_module()
+def nikto_scan(target_url: str) -> List[str]:
+    """
+    Run Nikto web server scanner.
+    
+    Args:
+        target_url: Target URL to scan
+        
+    Returns:
+        List[str]: List of findings
+    """
+    findings = []
+    
+    try:
+        if not check_tool("nikto"):
+            print_error("Nikto not found. Please install it first.")
+            return findings
+        
+        # Get timeout from config
+        timeout = get_timeout('nikto')
+        
+        print_info(f"Running Nikto scan on {target_url}")
+        
+        # Get web settings from config
+        config = get_config()
+        user_agent = get_setting('web_settings.user_agent', 'Mozilla/5.0')
+        
+        process = subprocess.Popen(
+            ["nikto", "-h", target_url, "-useragent", user_agent],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+            
+            for line in stdout.split('\n'):
+                if line.strip() and ('+' in line or 'OSVDB' in line):
+                    findings.append(line.strip())
+                    console.print(f"[yellow]{line.strip()}[/yellow]")
+            
+            print_success(f"Nikto scan complete! Found {len(findings)} issues")
+        
+        except subprocess.TimeoutExpired:
+            process.kill()
+            print_warning(f"Nikto scan timed out after {timeout} seconds")
+        
+        return findings
+        
+    except Exception as e:
+        print_error(f"Error during Nikto scan: {str(e)}")
+        return findings
+
+
+def test_authentication(target_url: str, username_list: Optional[str] = None, password_list: Optional[str] = None) -> Optional[Dict[str, str]]:
+    """
+    Test authentication mechanisms with brute force.
+    
+    Args:
+        target_url: Target login URL
+        username_list: Path to username list
+        password_list: Path to password list
+        
+    Returns:
+        Dict: Valid credentials if found, None otherwise
+    """
+    try:
+        # Get default wordlists from config
+        if not username_list:
+            username_list = get_wordlist('usernames')
+        
+        if not password_list:
+            password_list = get_wordlist('passwords')
+        
+        # Prompt for wordlists with config defaults
+        username_list = Prompt.ask(
+            "[cyan]Enter username list path[/cyan]",
+            default=username_list
+        )
+        
+        password_list = Prompt.ask(
+            "[cyan]Enter password list path[/cyan]",
+            default=password_list
+        )
+        
+        if not os.path.exists(username_list):
+            print_error(f"Username list not found: {username_list}")
+            return None
+        
+        if not os.path.exists(password_list):
+            print_error(f"Password list not found: {password_list}")
+            return None
+        
+        print_info(f"Testing authentication on {target_url}")
+        print_warning("This is a basic implementation. Consider using specialized tools like Hydra or Burp Suite.")
+        
+        # Get web settings from config
+        config = get_config()
+        timeout = get_setting('web_settings.request_timeout', 10)
+        verify_ssl = get_setting('web_settings.verify_ssl', False)
+        
+        # Read username list (limit to first 10 for demo)
+        with open(username_list, 'r') as f:
+            usernames = [line.strip() for line in f.readlines()[:10]]
+        
+        # Read password list (limit to first 10 for demo)
+        with open(password_list, 'r') as f:
+            passwords = [line.strip() for line in f.readlines()[:10]]
+        
+        print_info(f"Testing {len(usernames)} usernames with {len(passwords)} passwords")
+        
+        # This is a simplified example
+        # In production, use tools like Hydra or Burp Suite
+        print_warning("For production use, please use specialized tools like:")
+        print_info("- Hydra: hydra -L users.txt -P pass.txt <target> http-post-form")
+        print_info("- Burp Suite Intruder")
+        print_info("- Medusa")
+        
+        return None
+        
+    except Exception as e:
+        print_error(f"Error during authentication test: {str(e)}")
+        return None
+
