@@ -501,9 +501,6 @@ def interactive_mode():
     from rich.prompt import Prompt
     
     while True:
-        clear_screen()
-        print_banner()
-        
         workspace = get_active_workspace()
         if workspace:
             print_success(f"Active workspace: {workspace['name']}")
@@ -511,6 +508,7 @@ def interactive_mode():
             print_warning("No active workspace. Use the Workspace menu to create or activate one.")
         
         print("\n")
+        clear_screen()
         print_main_menu()
         
         choice = Prompt.ask("\n[cyan]Select option[/cyan]", choices=["0", "1", "2", "3", "4", "5", "6", "7"], default="0")
@@ -560,6 +558,9 @@ def main():
     # Check for all external system tool dependencies
     if not check_all_system_dependencies():
         sys.exit(1)
+    
+    # Display the banner once after all checks are done
+    print_banner()
     
     # Initialize database
     initialize_database()
