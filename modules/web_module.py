@@ -13,12 +13,16 @@ import subprocess
 import os
 import requests
 from typing import List, Dict, Optional
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+from bs4 import BeautifulSoup
 from rich.prompt import Prompt, Confirm
+from rich.table import Table
 from utils.console import print_info, print_success, print_error, print_warning, console
 from utils.checker import check_tool
 from utils.installer import install_package
 from utils.config import get_config, get_setting, get_wordlist, get_timeout
 from utils.db import add_host, add_web_finding, get_active_workspace
+from utils.ui import print_web_menu, clear_screen
 
 # Required tools
 REQUIRED_TOOLS = {
@@ -417,8 +421,361 @@ def test_authentication(target_url: str, username_list: Optional[str] = None, pa
         return None
 
 
-from rich.prompt import Prompt
-from utils.ui import print_web_menu, clear_screen
+def test_xss_vulnerability(target_url: str) -> List[Dict[str, any]]:
+    """
+    Test for XSS (Cross-Site Scripting) vulnerabilities.
+    
+    Args:
+        target_url: Target URL to test
+        
+    Returns:
+        List[Dict]: List of XSS vulnerabilities found
+    """
+    vulnerabilities = []
+    
+    # XSS Payload library
+    xss_payloads = [
+        "<script>alert('XSS')</script>",
+        "<img src=x onerror=alert('XSS')>",
+        "<svg/onload=alert('XSS')>",
+        "javascript:alert('XSS')",
+        "<iframe src=javascript:alert('XSS')>",
+        "<body onload=alert('XSS')>",
+        "'\"><script>alert('XSS')</script>",
+        "<script>alert(String.fromCharCode(88,83,83))</script>",
+        "<img src=\"x\" onerror=\"alert('XSS')\">",
+        "<input onfocus=alert('XSS') autofocus>",
+        "<select onfocus=alert('XSS') autofocus>",
+        "<textarea onfocus=alert('XSS') autofocus>",
+        "<keygen onfocus=alert('XSS') autofocus>",
+        "<video><source onerror=\"alert('XSS')\">",
+        "<audio src=x onerror=alert('XSS')>",
+        "<details open ontoggle=alert('XSS')>",
+        "<marquee onstart=alert('XSS')>",
+        "'-alert('XSS')-'",
+        "\"-alert('XSS')-\"",
+        "javascript:/*--></title></style></textarea></script></xmp><svg/onload='+/\"/+/onmouseover=1/+/[*/[]/+alert('XSS')//'>"
+    ]
+    
+    try:
+        print_info(f"Testing {target_url} for XSS vulnerabilities...")
+        print_info(f"Using {len(xss_payloads)} different payloads")
+        
+        # Get web settings
+        timeout = get_setting('web_settings.request_timeout', 10)
+        verify_ssl = get_setting('web_settings.verify_ssl', False)
+        user_agent = get_setting('web_settings.user_agent', 'Mozilla/5.0')
+        
+        headers = {
+            'User-Agent': user_agent
+        }
+        
+        # Parse URL to extract parameters
+        parsed_url = urlparse(target_url)
+        params = parse_qs(parsed_url.query)
+        
+        # If URL has no parameters, try to find forms
+        if not params:
+            print_info("No URL parameters found. Searching for input forms...")
+            try:
+                response = requests.get(target_url, headers=headers, timeout=timeout, verify=verify_ssl)
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                forms = soup.find_all('form')
+                if not forms:
+                    print_warning("No forms found on the page.")
+                    return vulnerabilities
+                
+                print_success(f"Found {len(forms)} form(s)")
+                
+                # Test each form
+                for form_idx, form in enumerate(forms, 1):
+                    print_info(f"Testing form {form_idx}/{len(forms)}...")
+                    
+                    form_action = form.get('action', '')
+                    form_method = form.get('method', 'get').lower()
+                    
+                    # Build absolute URL for form action
+                    if form_action:
+                        form_url = requests.compat.urljoin(target_url, form_action)
+                    else:
+                        form_url = target_url
+                    
+                    # Get all input fields
+                    inputs = form.find_all(['input', 'textarea', 'select'])
+                    
+                    if not inputs:
+                        continue
+                    
+                    # Test each payload on each input
+                    for payload in xss_payloads[:5]:  # Limit to first 5 for forms
+                        form_data = {}
+                        
+                        for input_field in inputs:
+                            input_name = input_field.get('name', '')
+                            input_type = input_field.get('type', 'text')
+                            
+                            if input_name:
+                                if input_type in ['text', 'search', 'email', 'url']:
+                                    form_data[input_name] = payload
+                                else:
+                                    form_data[input_name] = 'test'
+                        
+                        try:
+                            if form_method == 'post':
+                                response = requests.post(form_url, data=form_data, headers=headers, 
+                                                       timeout=timeout, verify=verify_ssl, allow_redirects=True)
+                            else:
+                                response = requests.get(form_url, params=form_data, headers=headers, 
+                                                      timeout=timeout, verify=verify_ssl, allow_redirects=True)
+                            
+                            # Check if payload is reflected in response
+                            if payload in response.text:
+                                vuln = {
+                                    'url': form_url,
+                                    'method': form_method.upper(),
+                                    'parameter': 'form_inputs',
+                                    'payload': payload,
+                                    'type': 'Reflected XSS',
+                                    'evidence': f"Payload reflected in response (form {form_idx})"
+                                }
+                                vulnerabilities.append(vuln)
+                                print_error(f"[!] XSS vulnerability found in form {form_idx}!")
+                                print_warning(f"    Payload: {payload}")
+                                break  # Found vuln in this form, move to next
+                        
+                        except requests.RequestException as e:
+                            print_warning(f"Request error: {str(e)[:50]}")
+                            continue
+                
+            except Exception as e:
+                print_error(f"Error scanning forms: {str(e)}")
+                return vulnerabilities
+        
+        else:
+            # Test each parameter with each payload
+            print_success(f"Found {len(params)} parameter(s): {', '.join(params.keys())}")
+            
+            for param_name, param_values in params.items():
+                print_info(f"Testing parameter: {param_name}")
+                
+                for payload in xss_payloads:
+                    # Create modified parameters
+                    test_params = params.copy()
+                    test_params[param_name] = [payload]
+                    
+                    # Rebuild URL with payload
+                    new_query = urlencode(test_params, doseq=True)
+                    test_url = urlunparse((
+                        parsed_url.scheme,
+                        parsed_url.netloc,
+                        parsed_url.path,
+                        parsed_url.params,
+                        new_query,
+                        parsed_url.fragment
+                    ))
+                    
+                    try:
+                        response = requests.get(test_url, headers=headers, timeout=timeout, 
+                                              verify=verify_ssl, allow_redirects=True)
+                        
+                        # Check if payload is reflected in response
+                        if payload in response.text:
+                            # Additional check: ensure it's not just in comments or encoded
+                            if '<script>' in response.text or 'onerror=' in response.text or 'onload=' in response.text:
+                                vuln = {
+                                    'url': target_url,
+                                    'method': 'GET',
+                                    'parameter': param_name,
+                                    'payload': payload,
+                                    'type': 'Reflected XSS',
+                                    'evidence': f"Payload reflected in response without encoding"
+                                }
+                                vulnerabilities.append(vuln)
+                                print_error(f"[!] XSS vulnerability found in parameter '{param_name}'!")
+                                print_warning(f"    Payload: {payload}")
+                                break  # Found vuln for this param, test next param
+                    
+                    except requests.RequestException as e:
+                        print_warning(f"Request error: {str(e)[:50]}")
+                        continue
+        
+        # Display results
+        if vulnerabilities:
+            table = Table(title="🔴 XSS Vulnerabilities Found", show_header=True, header_style="bold red")
+            table.add_column("№", style="dim", width=4)
+            table.add_column("Parameter", style="yellow")
+            table.add_column("Type", style="red")
+            table.add_column("Payload", style="cyan")
+            
+            for idx, vuln in enumerate(vulnerabilities, 1):
+                table.add_row(
+                    str(idx),
+                    vuln['parameter'],
+                    vuln['type'],
+                    vuln['payload'][:50] + "..." if len(vuln['payload']) > 50 else vuln['payload']
+                )
+            
+            console.print(table)
+            print_error(f"Found {len(vulnerabilities)} XSS vulnerability/vulnerabilities!")
+        else:
+            print_success("No XSS vulnerabilities found")
+        
+        return vulnerabilities
+        
+    except Exception as e:
+        print_error(f"Error during XSS testing: {str(e)}")
+        return vulnerabilities
+
+
+def web_crawler(target_url: str, max_depth: int = 2) -> Dict[str, any]:
+    """
+    Crawl website and map structure.
+    
+    Args:
+        target_url: Starting URL
+        max_depth: Maximum crawl depth (default: 2)
+        
+    Returns:
+        Dict: Crawl results with links, forms, and assets
+    """
+    results = {
+        'links': set(),
+        'forms': [],
+        'assets': {
+            'scripts': set(),
+            'stylesheets': set(),
+            'images': set()
+        },
+        'external_links': set()
+    }
+    
+    visited = set()
+    to_visit = [(target_url, 0)]  # (url, depth)
+    
+    # Get base domain
+    base_parsed = urlparse(target_url)
+    base_domain = f"{base_parsed.scheme}://{base_parsed.netloc}"
+    
+    try:
+        print_info(f"Starting web crawler on {target_url}")
+        print_info(f"Maximum depth: {max_depth}")
+        
+        # Get web settings
+        timeout = get_setting('web_settings.request_timeout', 10)
+        verify_ssl = get_setting('web_settings.verify_ssl', False)
+        user_agent = get_setting('web_settings.user_agent', 'Mozilla/5.0')
+        
+        headers = {
+            'User-Agent': user_agent
+        }
+        
+        while to_visit:
+            current_url, depth = to_visit.pop(0)
+            
+            if current_url in visited or depth > max_depth:
+                continue
+            
+            visited.add(current_url)
+            print_info(f"Crawling [{len(visited)}]: {current_url} (depth: {depth})")
+            
+            try:
+                response = requests.get(current_url, headers=headers, timeout=timeout, 
+                                      verify=verify_ssl, allow_redirects=True)
+                
+                if 'text/html' not in response.headers.get('Content-Type', ''):
+                    continue
+                
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                # Extract links
+                for link in soup.find_all('a', href=True):
+                    href = link['href']
+                    
+                    # Build absolute URL
+                    absolute_url = requests.compat.urljoin(current_url, href)
+                    parsed = urlparse(absolute_url)
+                    
+                    # Remove fragment
+                    clean_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, 
+                                          parsed.params, parsed.query, ''))
+                    
+                    # Check if same domain
+                    if parsed.netloc == base_parsed.netloc:
+                        results['links'].add(clean_url)
+                        if clean_url not in visited:
+                            to_visit.append((clean_url, depth + 1))
+                    else:
+                        results['external_links'].add(clean_url)
+                
+                # Extract forms
+                for form in soup.find_all('form'):
+                    form_data = {
+                        'action': form.get('action', ''),
+                        'method': form.get('method', 'get').upper(),
+                        'inputs': []
+                    }
+                    
+                    for input_field in form.find_all(['input', 'textarea', 'select']):
+                        form_data['inputs'].append({
+                            'name': input_field.get('name', ''),
+                            'type': input_field.get('type', 'text')
+                        })
+                    
+                    results['forms'].append(form_data)
+                
+                # Extract assets
+                for script in soup.find_all('script', src=True):
+                    script_url = requests.compat.urljoin(current_url, script['src'])
+                    results['assets']['scripts'].add(script_url)
+                
+                for link in soup.find_all('link', rel='stylesheet'):
+                    if link.get('href'):
+                        css_url = requests.compat.urljoin(current_url, link['href'])
+                        results['assets']['stylesheets'].add(css_url)
+                
+                for img in soup.find_all('img', src=True):
+                    img_url = requests.compat.urljoin(current_url, img['src'])
+                    results['assets']['images'].add(img_url)
+            
+            except requests.RequestException as e:
+                print_warning(f"Error crawling {current_url}: {str(e)[:50]}")
+                continue
+            except Exception as e:
+                print_warning(f"Parse error for {current_url}: {str(e)[:50]}")
+                continue
+        
+        # Display results
+        table = Table(title=f"🕷️  Web Crawler Results for {target_url}", show_header=True, header_style="bold cyan")
+        table.add_column("Category", style="yellow", width=20)
+        table.add_column("Count", style="green", width=10)
+        table.add_column("Details", style="cyan")
+        
+        table.add_row("Pages Crawled", str(len(visited)), f"Depth: {max_depth}")
+        table.add_row("Internal Links", str(len(results['links'])), "Links within domain")
+        table.add_row("External Links", str(len(results['external_links'])), "Links to other domains")
+        table.add_row("Forms Found", str(len(results['forms'])), "Input forms")
+        table.add_row("JavaScript Files", str(len(results['assets']['scripts'])), ".js files")
+        table.add_row("Stylesheets", str(len(results['assets']['stylesheets'])), ".css files")
+        table.add_row("Images", str(len(results['assets']['images'])), "Image files")
+        
+        console.print(table)
+        
+        print_success(f"Crawling complete! Visited {len(visited)} pages")
+        
+        # Convert sets to lists for JSON serialization
+        results['links'] = list(results['links'])
+        results['external_links'] = list(results['external_links'])
+        results['assets']['scripts'] = list(results['assets']['scripts'])
+        results['assets']['stylesheets'] = list(results['assets']['stylesheets'])
+        results['assets']['images'] = list(results['assets']['images'])
+        
+        return results
+        
+    except Exception as e:
+        print_error(f"Error during web crawling: {str(e)}")
+        return results
+
 
 def run_web_module():
     """
@@ -435,10 +792,41 @@ def run_web_module():
         target_url = Prompt.ask("[cyan]Enter target URL (e.g., http://example.com)[/cyan]")
         if not target_url: continue
 
-        if choice == "1": directory_enumeration(target_url)
-        elif choice == "2": sql_injection_test(target_url)
-        elif choice == "3": nikto_scan(target_url) # Nikto can detect XSS
-        elif choice == "4": test_authentication(target_url)
+        if choice == "1": 
+            directory_enumeration(target_url)
+        elif choice == "2": 
+            sql_injection_test(target_url)
+        elif choice == "3": 
+            # XSS Detection - now properly implemented
+            vulnerabilities = test_xss_vulnerability(target_url)
+            if vulnerabilities:
+                print_warning(f"\n⚠️  Security Alert: {len(vulnerabilities)} XSS vulnerability/vulnerabilities found!")
+                print_info("Recommendation: Sanitize user input and implement Content Security Policy (CSP)")
+        elif choice == "4": 
+            test_authentication(target_url)
+        elif choice == "5":
+            # Web Crawler - now properly implemented
+            max_depth = Prompt.ask("[cyan]Enter maximum crawl depth[/cyan]", default="2")
+            try:
+                max_depth = int(max_depth)
+            except:
+                max_depth = 2
+            
+            results = web_crawler(target_url, max_depth)
+            
+            # Ask if user wants to export results
+            export = Prompt.ask("\n[cyan]Export crawl results to file?[/cyan]", choices=["yes", "no"], default="no")
+            if export == "yes":
+                import json
+                from urllib.parse import urlparse
+                domain = urlparse(target_url).netloc.replace('.', '_')
+                filename = f"crawl_{domain}.json"
+                try:
+                    with open(filename, 'w') as f:
+                        json.dump(results, f, indent=2)
+                    print_success(f"Results exported to {filename}")
+                except Exception as e:
+                    print_error(f"Failed to export results: {e}")
         else:
             print_warning("This feature is not yet implemented.")
 
