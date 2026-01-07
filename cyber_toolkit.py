@@ -127,21 +127,19 @@ def auto_install_system_tools():
     
     print(f"📦 Found {total_missing} missing tools. Installing automatically...\n")
     
-    # Install apt packages
+    # Install apt packages (with visible output for sudo password)
     if missing_apt:
         print(f"  [APT] Installing {len(missing_apt)} packages...")
+        print(f"        Packages: {', '.join(missing_apt[:5])}{'...' if len(missing_apt) > 5 else ''}")
         try:
-            # Update apt first
+            # Update apt first (show output)
             subprocess.run(
                 ["sudo", "apt-get", "update", "-qq"],
-                capture_output=True,
                 timeout=120
             )
-            # Install missing packages
+            # Install missing packages (show output for password prompt)
             result = subprocess.run(
-                ["sudo", "apt-get", "install", "-y", "-qq"] + missing_apt,
-                capture_output=True,
-                text=True,
+                ["sudo", "apt-get", "install", "-y"] + missing_apt,
                 timeout=600
             )
             if result.returncode == 0:
@@ -158,9 +156,7 @@ def auto_install_system_tools():
         print(f"  [PIP] Installing {len(missing_pip)} packages...")
         try:
             result = subprocess.run(
-                [sys.executable, "-m", "pip", "install", "-q"] + missing_pip,
-                capture_output=True,
-                text=True,
+                [sys.executable, "-m", "pip", "install", "--break-system-packages"] + missing_pip,
                 timeout=300
             )
             if result.returncode == 0:
@@ -175,10 +171,9 @@ def auto_install_system_tools():
         print(f"  [GO] Installing {len(missing_go)} tools...")
         for tool in missing_go:
             try:
+                print(f"    Installing {tool}...")
                 result = subprocess.run(
-                    ["go", "install", "-v", go_tools[tool]],
-                    capture_output=True,
-                    text=True,
+                    ["go", "install", go_tools[tool]],
                     timeout=300
                 )
                 if result.returncode == 0:
