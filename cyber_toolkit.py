@@ -118,7 +118,6 @@ def auto_install_system_tools():
     pip_tools = {
         "theHarvester": "theHarvester",
         "sherlock": "sherlock-project",
-        "impacket-smbclient": "impacket",
     }
     
     # ===== GO TOOLS =====
@@ -128,15 +127,9 @@ def auto_install_system_tools():
         "nuclei": "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest",
         "ffuf": "github.com/ffuf/ffuf/v2@latest",
         "dnsx": "github.com/projectdiscovery/dnsx/cmd/dnsx@latest",
-        "amass": "github.com/owasp-amass/amass/v4/...@master",
     }
     
-    # ===== RUBY GEMS =====
-    gem_tools = {
-        "wpscan": "wpscan",
-    }
-    
-    total = len(apt_tools) + len(pip_tools) + len(go_tools) + len(gem_tools)
+    total = len(apt_tools) + len(pip_tools) + len(go_tools)
     missing_apt = [pkg for cmd, pkg in apt_tools.items() if not shutil.which(cmd)]
     
     print(f"\n🔍 Scanning {total} tools...")
@@ -164,7 +157,7 @@ def auto_install_system_tools():
     if missing_go:
         go_bin = shutil.which("go") or "/usr/bin/go"
         if os.path.exists(go_bin):
-            print(f"\n━━━ [3/4] GO: {len(missing_go)} tools ━━━")
+            print(f"\n━━━ [3/3] GO: {len(missing_go)} tools ━━━")
             go_path = os.path.expanduser("~/go")
             os.makedirs(f"{go_path}/bin", exist_ok=True)
             os.environ["GOPATH"] = go_path
@@ -173,29 +166,14 @@ def auto_install_system_tools():
                 print(f"    Installing {tool}...")
                 subprocess.run([go_bin, "install", go_tools[tool]], env=os.environ)
         else:
-            print("\n━━━ [3/4] GO: Go not found ━━━")
+            print("\n━━━ [3/3] GO: Go not found ━━━")
     else:
-        print("\n━━━ [3/4] GO: All installed ✅ ━━━")
-    
-    # [4] GEM (check again after apt)
-    missing_gem = [pkg for cmd, pkg in gem_tools.items() if not shutil.which(cmd)]
-    if missing_gem:
-        gem_bin = shutil.which("gem") or "/usr/bin/gem"
-        if os.path.exists(gem_bin):
-            print(f"\n━━━ [4/4] GEM: {len(missing_gem)} packages ━━━")
-            for gem in missing_gem:
-                print(f"    Installing {gem}...")
-                subprocess.run(["sudo", gem_bin, "install", gem])
-        else:
-            print("\n━━━ [4/4] GEM: Ruby not found ━━━")
-    else:
-        print("\n━━━ [4/4] GEM: All installed ✅ ━━━")
+        print("\n━━━ [3/3] GO: All installed ✅ ━━━")
     
     # Final count
     installed = sum(1 for cmd in apt_tools.keys() if shutil.which(cmd))
     installed += sum(1 for cmd in pip_tools.keys() if shutil.which(cmd))
     installed += sum(1 for cmd in go_tools.keys() if shutil.which(cmd))
-    installed += sum(1 for cmd in gem_tools.keys() if shutil.which(cmd))
     
     print(f"\n════════════════════════════════════════")
     print(f"✅ Complete! {installed}/{total} tools installed")
@@ -272,12 +250,6 @@ class CyberToolkit:
                         "description": "Subdomain discovery tool",
                         "example": "subfinder -d target.com"
                     },
-                    "amass": {
-                        "name": "Amass",
-                        "cmd": "amass",
-                        "description": "Network mapping and external asset discovery",
-                        "example": "amass enum -d target.com"
-                    },
                     "dnsx": {
                         "name": "DNSx",
                         "cmd": "dnsx",
@@ -337,12 +309,6 @@ class CyberToolkit:
                         "cmd": "nikto",
                         "description": "Web server scanner",
                         "example": "nikto -h target.com"
-                    },
-                    "wpscan": {
-                        "name": "WPScan",
-                        "cmd": "wpscan",
-                        "description": "WordPress vulnerability scanner",
-                        "example": "wpscan --url http://target.com"
                     }
                 }
             },
@@ -373,18 +339,6 @@ class CyberToolkit:
                         "cmd": "nc",
                         "description": "Network utility for TCP/UDP",
                         "example": "nc -lvnp 4444"
-                    }
-                }
-            },
-            "exploit": {
-                "name": "💥 Exploitation & Post-Exploitation",
-                "description": "Exploitation frameworks and post-exploitation tools",
-                "tools": {
-                    "impacket": {
-                        "name": "Impacket",
-                        "cmd": "impacket-smbclient",
-                        "description": "Python network protocol library",
-                        "example": "impacket-smbclient target.com"
                     }
                 }
             },
@@ -476,12 +430,6 @@ class CyberToolkit:
                 "name": "🛠️ Utilities",
                 "description": "General-purpose security utilities",
                 "tools": {
-                    "searchsploit": {
-                        "name": "SearchSploit",
-                        "cmd": "searchsploit",
-                        "description": "Exploit-DB search tool",
-                        "example": "searchsploit apache 2.4"
-                    },
                     "git": {
                         "name": "Git",
                         "cmd": "git",
