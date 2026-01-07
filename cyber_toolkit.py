@@ -70,30 +70,24 @@ def auto_install_dependencies(silent: bool = False) -> bool:
         return True  # Continue anyway
 
 
-def install_system_tools() -> dict:
-    """Check and attempt to install missing system tools."""
-    results = {"installed": [], "missing": [], "failed": []}
+def auto_install_system_tools():
+    """Automatically install all missing system tools."""
+    print("🔍 Checking system tools...")
     
-    # Tools that can be installed via pip
+    # Define all tools and their installation methods
+    apt_tools = [
+        "nmap", "curl", "git", "nikto", "hydra", "john", "hashcat",
+        "tcpdump", "wireshark", "netcat-traditional", "masscan",
+        "aircrack-ng", "reaver", "wifite", "medusa", "crunch",
+        "cewl", "dirb", "gobuster", "wpscan", "sqlmap"
+    ]
+    
     pip_tools = {
-        "sqlmap": "sqlmap",
-        "wfuzz": "wfuzz", 
+        "wfuzz": "wfuzz",
         "theHarvester": "theHarvester",
+        "sherlock": "sherlock-project",
     }
     
-    # Tools that need apt/brew
-    system_tools = {
-        "nmap": {"apt": "nmap", "brew": "nmap"},
-        "curl": {"apt": "curl", "brew": "curl"},
-        "git": {"apt": "git", "brew": "git"},
-        "nikto": {"apt": "nikto", "brew": "nikto"},
-        "hydra": {"apt": "hydra", "brew": "hydra"},
-        "john": {"apt": "john", "brew": "john"},
-        "tcpdump": {"apt": "tcpdump", "brew": "tcpdump"},
-        "wireshark": {"apt": "wireshark", "brew": "wireshark"},
-    }
-    
-    # Go tools
     go_tools = {
         "subfinder": "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
         "httpx": "github.com/projectdiscovery/httpx/cmd/httpx@latest",
@@ -103,19 +97,107 @@ def install_system_tools() -> dict:
         "gobuster": "github.com/OJ/gobuster/v3@latest",
     }
     
-    # Check each tool and record status
-    for tool in list(pip_tools.keys()) + list(system_tools.keys()) + list(go_tools.keys()):
-        if shutil.which(tool):
-            results["installed"].append(tool)
-        else:
-            results["missing"].append(tool)
+    missing_apt = []
+    missing_pip = []
+    missing_go = []
     
-    return results
+    # Check apt tools
+    for tool in apt_tools:
+        cmd = tool.replace("-traditional", "")  # netcat-traditional -> nc
+        if tool == "netcat-traditional":
+            cmd = "nc"
+        if not shutil.which(cmd):
+            missing_apt.append(tool)
+    
+    # Check pip tools
+    for cmd, pkg in pip_tools.items():
+        if not shutil.which(cmd):
+            missing_pip.append(pkg)
+    
+    # Check go tools
+    for cmd in go_tools.keys():
+        if not shutil.which(cmd):
+            missing_go.append(cmd)
+    
+    total_missing = len(missing_apt) + len(missing_pip) + len(missing_go)
+    
+    if total_missing == 0:
+        print("✅ All tools are installed!\n")
+        return
+    
+    print(f"📦 Found {total_missing} missing tools. Installing automatically...\n")
+    
+    # Install apt packages
+    if missing_apt:
+        print(f"  [APT] Installing {len(missing_apt)} packages...")
+        try:
+            # Update apt first
+            subprocess.run(
+                ["sudo", "apt-get", "update", "-qq"],
+                capture_output=True,
+                timeout=120
+            )
+            # Install missing packages
+            result = subprocess.run(
+                ["sudo", "apt-get", "install", "-y", "-qq"] + missing_apt,
+                capture_output=True,
+                text=True,
+                timeout=600
+            )
+            if result.returncode == 0:
+                print(f"  ✅ APT packages installed successfully!")
+            else:
+                print(f"  ⚠️  Some APT packages may have failed")
+        except subprocess.TimeoutExpired:
+            print(f"  ⚠️  APT installation timed out")
+        except Exception as e:
+            print(f"  ⚠️  APT error: {e}")
+    
+    # Install pip packages
+    if missing_pip:
+        print(f"  [PIP] Installing {len(missing_pip)} packages...")
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "-q"] + missing_pip,
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+            if result.returncode == 0:
+                print(f"  ✅ PIP packages installed successfully!")
+            else:
+                print(f"  ⚠️  Some PIP packages may have failed")
+        except Exception as e:
+            print(f"  ⚠️  PIP error: {e}")
+    
+    # Install go tools
+    if missing_go and shutil.which("go"):
+        print(f"  [GO] Installing {len(missing_go)} tools...")
+        for tool in missing_go:
+            try:
+                result = subprocess.run(
+                    ["go", "install", "-v", go_tools[tool]],
+                    capture_output=True,
+                    text=True,
+                    timeout=300
+                )
+                if result.returncode == 0:
+                    print(f"    ✅ {tool}")
+                else:
+                    print(f"    ⚠️  {tool} failed")
+            except Exception as e:
+                print(f"    ⚠️  {tool}: {e}")
+    elif missing_go and not shutil.which("go"):
+        print(f"  ⚠️  Go not installed. Skipping: {', '.join(missing_go)}")
+        print(f"      Install Go: sudo apt install golang-go")
+    
+    print()
 
 
 # Run dependency check on every startup
 print("\n🔧 FOU4 - Startup Check\n")
 auto_install_dependencies(silent=False)
+auto_install_system_tools()
 
 # Try importing Rich
 try:
