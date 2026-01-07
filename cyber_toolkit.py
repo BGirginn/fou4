@@ -89,13 +89,17 @@ def auto_install_system_tools():
         "tcpdump": "tcpdump",
         "nc": "netcat-traditional",
         "ncat": "ncat",
-        # Password
+        # Password & Wordlists
         "hydra": "hydra",
         "john": "john",
         "hashcat": "hashcat",
         "medusa": "medusa",
         "crunch": "crunch",
         "cewl": "cewl",
+        "ophcrack": "ophcrack",
+        # Wordlists
+        "seclists": "seclists",
+        "wordlists": "wordlists",
         # Wireless
         "aircrack-ng": "aircrack-ng",
         "reaver": "reaver",
@@ -430,6 +434,18 @@ class CyberToolkit:
                         "cmd": "cewl",
                         "description": "Custom wordlist generator from websites",
                         "example": "cewl http://target.com -w wordlist.txt"
+                    },
+                    "ophcrack": {
+                        "name": "Ophcrack",
+                        "cmd": "ophcrack",
+                        "description": "Windows password cracker using rainbow tables",
+                        "example": "ophcrack"
+                    },
+                    "seclists": {
+                        "name": "SecLists",
+                        "cmd": "seclists",
+                        "description": "Collection of security wordlists",
+                        "example": "ls /usr/share/seclists/"
                     }
                 }
             },
