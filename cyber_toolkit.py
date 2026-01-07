@@ -473,24 +473,25 @@ class CyberToolkit:
     
     def show_banner(self):
         """Display the application banner."""
-        banner = """
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                                                                              │
-│    ╔═══╗  ╔═══╗  ╦   ╦  ╦   ╦                                                │
-│    ║      ║   ║  ║   ║  ║   ║                                                │
-│    ╠═══   ║   ║  ║   ║  ╠═══╣                                                │
-│    ║      ║   ║  ║   ║      ║                                                │
-│    ║      ╚═══╝  ╚═══╝      ║                                                │
-│                                                                              │
-│                    UNIFIED SECURITY TESTING INTERFACE                        │
-│                                                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
-"""
-        console.print(banner, style="bold cyan")
-        console.print(f"  [dim]Version {VERSION} '{CODENAME}'[/dim]  |  [dim]{len(self._get_all_tools())} Tools[/dim]  |  [dim]{len(self.tools)} Categories[/dim]\n")
+        banner_text = """
+[bold cyan]███████╗ ██████╗ ██╗   ██╗██╗  ██╗[/bold cyan]
+[bold cyan]██╔════╝██╔═══██╗██║   ██║██║  ██║[/bold cyan]
+[bold cyan]█████╗  ██║   ██║██║   ██║███████║[/bold cyan]
+[bold cyan]██╔══╝  ██║   ██║██║   ██║╚════██║[/bold cyan]
+[bold cyan]██║     ╚██████╔╝╚██████╔╝     ██║[/bold cyan]
+[bold cyan]╚═╝      ╚═════╝  ╚═════╝      ╚═╝[/bold cyan]"""
         
+        console.print(banner_text)
+        
+        # Status bar
+        total_tools = len(self._get_all_tools())
+        installed = sum(1 for _, t in self._get_all_tools() if self.check_tool_installed(t["cmd"]))
+        
+        status_text = f"[dim]v{VERSION}[/dim] │ [green]{installed}[/green][dim]/{total_tools} tools[/dim] │ [dim]{len(self.tools)} categories[/dim]"
         if self.current_target:
-            console.print(f"  [yellow]Target:[/yellow] [bold green]{self.current_target}[/bold green]\n")
+            status_text += f" │ [yellow]⎯⎯▶[/yellow] [bold white]{self.current_target}[/bold white]"
+        
+        console.print(f"\n  {status_text}\n")
     
     def _get_all_tools(self) -> List[Tuple[str, dict]]:
         """Get flat list of all tools."""
@@ -506,21 +507,32 @@ class CyberToolkit:
     
     def show_main_menu(self) -> List[str]:
         """Display main menu and return options."""
-        console.print("\n[bold white]═══ MAIN MENU ═══[/bold white]\n")
         
         menu_items = []
+        menu_rows = []
+        
         for idx, (key, category) in enumerate(self.tools.items(), 1):
             tool_count = len(category["tools"])
             installed = sum(1 for t in category["tools"].values() if self.check_tool_installed(t["cmd"]))
-            status = f"[green]{installed}/{tool_count}[/green]" if installed == tool_count else f"[yellow]{installed}/{tool_count}[/yellow]"
             
-            console.print(f"  [cyan][{idx}][/cyan] {category['name']} {status}")
+            if installed == tool_count:
+                status = f"[bold green]●[/bold green] {installed}/{tool_count}"
+            elif installed > 0:
+                status = f"[bold yellow]●[/bold yellow] {installed}/{tool_count}"
+            else:
+                status = f"[bold red]●[/bold red] {installed}/{tool_count}"
+            
+            menu_rows.append(f"  [bold cyan]{idx}[/bold cyan]  {category['name']} [dim]{status}[/dim]")
             menu_items.append(key)
         
-        console.print()
-        console.print(f"  [cyan][8][/cyan] ⚙️  Settings & Configuration")
-        console.print(f"  [cyan][9][/cyan] 📊 View Results")
-        console.print(f"  [cyan][0][/cyan] 🚪 Exit")
+        # Create menu panel
+        menu_content = "\n".join(menu_rows)
+        menu_content += "\n\n[dim]─────────────────────────────────────────[/dim]"
+        menu_content += "\n  [bold cyan]8[/bold cyan]  ⚙️  Settings & Configuration"
+        menu_content += "\n  [bold cyan]9[/bold cyan]  📊 View Results"
+        menu_content += "\n  [bold cyan]0[/bold cyan]  🚪 Exit"
+        
+        console.print(Panel(menu_content, title="[bold white]MAIN MENU[/bold white]", border_style="cyan", padding=(1, 2)))
         
         return menu_items
     
