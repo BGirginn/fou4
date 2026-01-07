@@ -71,22 +71,27 @@ def auto_install_dependencies(silent: bool = False) -> bool:
 
 
 def auto_install_system_tools():
-    """Automatically install all missing system tools."""
-    print("🔍 Checking system tools...")
+    """Automatically install and update ALL system tools."""
+    print("🔍 Checking and installing system tools...\n")
     
-    # Define all tools and their installation methods
+    # ALL apt packages to install
     apt_tools = [
-        "nmap", "curl", "git", "nikto", "hydra", "john", "hashcat",
+        # Core tools
+        "nmap", "curl", "git", "wget", "jq",
+        # Security tools
+        "nikto", "hydra", "john", "hashcat", "sqlmap",
         "tcpdump", "wireshark", "netcat-traditional", "masscan",
         "aircrack-ng", "reaver", "wifite", "medusa", "crunch",
-        "cewl", "dirb", "gobuster", "wpscan", "sqlmap"
+        "cewl", "dirb", "gobuster", "wpscan",
+        # Go language (for go tools)
+        "golang-go",
     ]
     
-    pip_tools = {
-        "wfuzz": "wfuzz",
-        "theHarvester": "theHarvester",
-        "sherlock": "sherlock-project",
-    }
+    pip_tools = [
+        "wfuzz",
+        "theHarvester", 
+        "sherlock-project",
+    ]
     
     go_tools = {
         "subfinder": "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
@@ -94,99 +99,80 @@ def auto_install_system_tools():
         "nuclei": "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest",
         "ffuf": "github.com/ffuf/ffuf/v2@latest",
         "dnsx": "github.com/projectdiscovery/dnsx/cmd/dnsx@latest",
-        "gobuster": "github.com/OJ/gobuster/v3@latest",
     }
     
-    missing_apt = []
-    missing_pip = []
-    missing_go = []
+    # Step 1: Update system packages
+    print("📦 [1/4] Updating system packages...")
+    try:
+        subprocess.run(["sudo", "apt-get", "update"], timeout=300)
+        subprocess.run(["sudo", "apt-get", "upgrade", "-y"], timeout=600)
+        print("  ✅ System updated!\n")
+    except Exception as e:
+        print(f"  ⚠️  Update error: {e}\n")
     
-    # Check apt tools
-    for tool in apt_tools:
-        cmd = tool.replace("-traditional", "")  # netcat-traditional -> nc
-        if tool == "netcat-traditional":
-            cmd = "nc"
-        if not shutil.which(cmd):
-            missing_apt.append(tool)
+    # Step 2: Install all apt packages
+    print(f"📦 [2/4] Installing {len(apt_tools)} apt packages...")
+    print(f"    Tools: {', '.join(apt_tools[:8])}...")
+    try:
+        result = subprocess.run(
+            ["sudo", "apt-get", "install", "-y"] + apt_tools,
+            timeout=1200
+        )
+        if result.returncode == 0:
+            print("  ✅ APT packages installed!\n")
+        else:
+            print("  ⚠️  Some APT packages may have failed\n")
+    except subprocess.TimeoutExpired:
+        print("  ⚠️  APT installation timed out\n")
+    except Exception as e:
+        print(f"  ⚠️  APT error: {e}\n")
     
-    # Check pip tools
-    for cmd, pkg in pip_tools.items():
-        if not shutil.which(cmd):
-            missing_pip.append(pkg)
+    # Step 3: Install pip packages
+    print(f"📦 [3/4] Installing {len(pip_tools)} pip packages...")
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--upgrade", "--break-system-packages"] + pip_tools,
+            timeout=300
+        )
+        if result.returncode == 0:
+            print("  ✅ PIP packages installed!\n")
+        else:
+            print("  ⚠️  Some PIP packages may have failed\n")
+    except Exception as e:
+        print(f"  ⚠️  PIP error: {e}\n")
     
-    # Check go tools
-    for cmd in go_tools.keys():
-        if not shutil.which(cmd):
-            missing_go.append(cmd)
-    
-    total_missing = len(missing_apt) + len(missing_pip) + len(missing_go)
-    
-    if total_missing == 0:
-        print("✅ All tools are installed!\n")
-        return
-    
-    print(f"📦 Found {total_missing} missing tools. Installing automatically...\n")
-    
-    # Install apt packages (with visible output for sudo password)
-    if missing_apt:
-        print(f"  [APT] Installing {len(missing_apt)} packages...")
-        print(f"        Packages: {', '.join(missing_apt[:5])}{'...' if len(missing_apt) > 5 else ''}")
-        try:
-            # Update apt first (show output)
-            subprocess.run(
-                ["sudo", "apt-get", "update", "-qq"],
-                timeout=120
-            )
-            # Install missing packages (show output for password prompt)
-            result = subprocess.run(
-                ["sudo", "apt-get", "install", "-y"] + missing_apt,
-                timeout=600
-            )
-            if result.returncode == 0:
-                print(f"  ✅ APT packages installed successfully!")
-            else:
-                print(f"  ⚠️  Some APT packages may have failed")
-        except subprocess.TimeoutExpired:
-            print(f"  ⚠️  APT installation timed out")
-        except Exception as e:
-            print(f"  ⚠️  APT error: {e}")
-    
-    # Install pip packages
-    if missing_pip:
-        print(f"  [PIP] Installing {len(missing_pip)} packages...")
-        try:
-            result = subprocess.run(
-                [sys.executable, "-m", "pip", "install", "--break-system-packages"] + missing_pip,
-                timeout=300
-            )
-            if result.returncode == 0:
-                print(f"  ✅ PIP packages installed successfully!")
-            else:
-                print(f"  ⚠️  Some PIP packages may have failed")
-        except Exception as e:
-            print(f"  ⚠️  PIP error: {e}")
-    
-    # Install go tools
-    if missing_go and shutil.which("go"):
-        print(f"  [GO] Installing {len(missing_go)} tools...")
-        for tool in missing_go:
+    # Step 4: Install Go tools (if Go is available)
+    if shutil.which("go"):
+        print(f"📦 [4/4] Installing {len(go_tools)} Go tools...")
+        
+        # Set GOPATH if not set
+        go_path = os.environ.get("GOPATH", os.path.expanduser("~/go"))
+        go_bin = os.path.join(go_path, "bin")
+        os.environ["GOPATH"] = go_path
+        
+        # Add go bin to PATH if not there
+        if go_bin not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = f"{go_bin}:{os.environ.get('PATH', '')}"
+        
+        for tool_name, tool_path in go_tools.items():
+            print(f"    Installing {tool_name}...")
             try:
-                print(f"    Installing {tool}...")
                 result = subprocess.run(
-                    ["go", "install", go_tools[tool]],
-                    timeout=300
+                    ["go", "install", tool_path],
+                    timeout=300,
+                    env=os.environ
                 )
                 if result.returncode == 0:
-                    print(f"    ✅ {tool}")
+                    print(f"      ✅ {tool_name} installed")
                 else:
-                    print(f"    ⚠️  {tool} failed")
+                    print(f"      ⚠️  {tool_name} failed")
             except Exception as e:
-                print(f"    ⚠️  {tool}: {e}")
-    elif missing_go and not shutil.which("go"):
-        print(f"  ⚠️  Go not installed. Skipping: {', '.join(missing_go)}")
-        print(f"      Install Go: sudo apt install golang-go")
+                print(f"      ⚠️  {tool_name}: {e}")
+        print()
+    else:
+        print("📦 [4/4] Go not available yet. Run script again after reboot to install Go tools.\n")
     
-    print()
+    print("✅ Tool installation complete!\n")
 
 
 # Run dependency check on every startup
