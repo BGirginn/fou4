@@ -73,36 +73,52 @@ def auto_install_dependencies(silent: bool = False) -> bool:
 def auto_install_system_tools():
     """Automatically detect and install ALL missing system tools in one run."""
     
-    # APT packages (cmd -> package)
+    # ===== APT PACKAGES =====
     apt_tools = {
-        # Core
-        "nmap": "nmap", "curl": "curl", "git": "git", "wget": "wget", "jq": "jq",
-        # Web
-        "nikto": "nikto", "gobuster": "gobuster", "sqlmap": "sqlmap", "dirb": "dirb",
-        # Network
-        "tcpdump": "tcpdump", "wireshark": "wireshark", "tshark": "tshark",
-        "nc": "netcat-traditional", "ncat": "ncat", "bettercap": "bettercap",
-        # Password
-        "hydra": "hydra", "john": "john", "hashcat": "hashcat", 
-        "medusa": "medusa", "crunch": "crunch", "cewl": "cewl",
         # Recon
-        "masscan": "masscan",
+        "nmap": "nmap",
+        "masscan": "masscan", 
+        # Web
+        "nikto": "nikto",
+        "gobuster": "gobuster",
+        "sqlmap": "sqlmap",
+        "dirb": "dirb",
+        # Network
+        "wireshark": "wireshark",
+        "tshark": "tshark",
+        "tcpdump": "tcpdump",
+        "nc": "netcat-traditional",
+        "ncat": "ncat",
+        # Password
+        "hydra": "hydra",
+        "john": "john",
+        "hashcat": "hashcat",
+        "medusa": "medusa",
+        "crunch": "crunch",
+        "cewl": "cewl",
         # Wireless
-        "aircrack-ng": "aircrack-ng", "reaver": "reaver", "wifite": "wifite",
+        "aircrack-ng": "aircrack-ng",
+        "reaver": "reaver",
+        "wifite": "wifite",
         # Utils
         "searchsploit": "exploitdb",
-        # Go language
+        "curl": "curl",
+        "git": "git",
+        "wget": "wget",
+        "jq": "jq",
+        # Languages for other tools
         "go": "golang-go",
-        # Ruby (for wpscan)
         "gem": "ruby-full",
     }
     
+    # ===== PIP PACKAGES =====
     pip_tools = {
         "theHarvester": "theHarvester",
         "sherlock": "sherlock-project",
         "impacket-smbclient": "impacket",
     }
     
+    # ===== GO TOOLS =====
     go_tools = {
         "subfinder": "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
         "httpx": "github.com/projectdiscovery/httpx/cmd/httpx@latest",
@@ -112,26 +128,26 @@ def auto_install_system_tools():
         "amass": "github.com/owasp-amass/amass/v4/...@master",
     }
     
-    gem_tools = {"wpscan": "wpscan"}
+    # ===== RUBY GEMS =====
+    gem_tools = {
+        "wpscan": "wpscan",
+    }
     
-    # Count total
     total = len(apt_tools) + len(pip_tools) + len(go_tools) + len(gem_tools)
-    
-    # Detect missing APT
     missing_apt = [pkg for cmd, pkg in apt_tools.items() if not shutil.which(cmd)]
     
     print(f"\n🔍 Scanning {total} tools...")
     
-    # [1] Install APT first (includes Go and Ruby)
+    # [1] APT
     if missing_apt:
         print(f"\n━━━ [1/4] APT: {len(missing_apt)} packages ━━━")
-        print(f"    {', '.join(missing_apt[:10])}{'...' if len(missing_apt) > 10 else ''}\n")
+        print(f"    {', '.join(missing_apt[:8])}{'...' if len(missing_apt) > 8 else ''}\n")
         subprocess.run(["sudo", "apt-get", "update"])
         subprocess.run(["sudo", "apt-get", "install", "-y"] + missing_apt)
     else:
         print("\n━━━ [1/4] APT: All installed ✅ ━━━")
     
-    # [2] Install PIP packages
+    # [2] PIP
     missing_pip = [pkg for cmd, pkg in pip_tools.items() if not shutil.which(cmd)]
     if missing_pip:
         print(f"\n━━━ [2/4] PIP: {len(missing_pip)} packages ━━━")
@@ -140,10 +156,9 @@ def auto_install_system_tools():
     else:
         print("\n━━━ [2/4] PIP: All installed ✅ ━━━")
     
-    # [3] Install Go tools (check go again - it may have just been installed)
+    # [3] GO (check again after apt)
     missing_go = [cmd for cmd in go_tools.keys() if not shutil.which(cmd)]
     if missing_go:
-        # Check for go binary (might be in /usr/bin after apt install)
         go_bin = shutil.which("go") or "/usr/bin/go"
         if os.path.exists(go_bin):
             print(f"\n━━━ [3/4] GO: {len(missing_go)} tools ━━━")
@@ -151,7 +166,6 @@ def auto_install_system_tools():
             os.makedirs(f"{go_path}/bin", exist_ok=True)
             os.environ["GOPATH"] = go_path
             os.environ["PATH"] = f"{go_path}/bin:/usr/local/go/bin:{os.environ.get('PATH', '')}"
-            
             for tool in missing_go:
                 print(f"    Installing {tool}...")
                 subprocess.run([go_bin, "install", go_tools[tool]], env=os.environ)
@@ -160,7 +174,7 @@ def auto_install_system_tools():
     else:
         print("\n━━━ [3/4] GO: All installed ✅ ━━━")
     
-    # [4] Install Ruby gems (check gem again - it may have just been installed)
+    # [4] GEM (check again after apt)
     missing_gem = [pkg for cmd, pkg in gem_tools.items() if not shutil.which(cmd)]
     if missing_gem:
         gem_bin = shutil.which("gem") or "/usr/bin/gem"
@@ -249,12 +263,6 @@ class CyberToolkit:
                         "description": "Fast TCP port scanner",
                         "example": "masscan -p1-65535 target.com --rate=1000"
                     },
-                    "rustscan": {
-                        "name": "RustScan",
-                        "cmd": "rustscan",
-                        "description": "Modern port scanner",
-                        "example": "rustscan -a target.com"
-                    },
                     "subfinder": {
                         "name": "Subfinder",
                         "cmd": "subfinder",
@@ -308,12 +316,6 @@ class CyberToolkit:
                         "cmd": "sqlmap",
                         "description": "Automatic SQL injection tool",
                         "example": "sqlmap -u 'http://target.com/page?id=1'"
-                    },
-                    "wfuzz": {
-                        "name": "WFuzz",
-                        "cmd": "wfuzz",
-                        "description": "Web fuzzer",
-                        "example": "wfuzz -w wordlist.txt http://target.com/FUZZ"
                     },
                     "httpx": {
                         "name": "HTTPx",
@@ -375,53 +377,17 @@ class CyberToolkit:
                         "description": "Improved netcat from Nmap",
                         "example": "ncat -lvnp 4444"
                     },
-                    "bettercap": {
-                        "name": "Bettercap",
-                        "cmd": "bettercap",
-                        "description": "Network attack and monitoring tool",
-                        "example": "bettercap -iface eth0"
-                    }
                 }
             },
             "exploit": {
                 "name": "💥 Exploitation & Post-Exploitation",
                 "description": "Exploitation frameworks and post-exploitation tools",
                 "tools": {
-                    "msfconsole": {
-                        "name": "Metasploit",
-                        "cmd": "msfconsole",
-                        "description": "Penetration testing framework",
-                        "example": "msfconsole"
-                    },
-                    "crackmapexec": {
-                        "name": "CrackMapExec",
-                        "cmd": "crackmapexec",
-                        "description": "Swiss army knife for pentesting networks",
-                        "example": "crackmapexec smb target.com"
-                    },
-                    "evil-winrm": {
-                        "name": "Evil-WinRM",
-                        "cmd": "evil-winrm",
-                        "description": "Windows Remote Management shell",
-                        "example": "evil-winrm -i target.com -u user -p pass"
-                    },
                     "impacket": {
                         "name": "Impacket",
                         "cmd": "impacket-smbclient",
                         "description": "Python network protocol library",
                         "example": "impacket-smbclient target.com"
-                    },
-                    "linpeas": {
-                        "name": "LinPEAS",
-                        "cmd": "linpeas.sh",
-                        "description": "Linux privilege escalation script",
-                        "example": "./linpeas.sh"
-                    },
-                    "winpeas": {
-                        "name": "WinPEAS",
-                        "cmd": "winpeas.exe",
-                        "description": "Windows privilege escalation script",
-                        "example": "winpeas.exe"
                     }
                 }
             },
