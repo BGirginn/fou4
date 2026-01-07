@@ -114,12 +114,6 @@ def auto_install_system_tools():
         "gem": "ruby-full",
     }
     
-    # ===== PIP PACKAGES =====
-    pip_tools = {
-        "theHarvester": "theHarvester",
-        "sherlock": "sherlock-project",
-    }
-    
     # ===== GO TOOLS =====
     go_tools = {
         "subfinder": "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
@@ -129,35 +123,26 @@ def auto_install_system_tools():
         "dnsx": "github.com/projectdiscovery/dnsx/cmd/dnsx@latest",
     }
     
-    total = len(apt_tools) + len(pip_tools) + len(go_tools)
+    total = len(apt_tools) + len(go_tools)
     missing_apt = [pkg for cmd, pkg in apt_tools.items() if not shutil.which(cmd)]
     
     print(f"\n🔍 Scanning {total} tools...")
     
     # [1] APT
     if missing_apt:
-        print(f"\n━━━ [1/4] APT: {len(missing_apt)} packages ━━━")
+        print(f"\n━━━ [1/2] APT: {len(missing_apt)} packages ━━━")
         print(f"    {', '.join(missing_apt[:8])}{'...' if len(missing_apt) > 8 else ''}\n")
         subprocess.run(["sudo", "apt-get", "update"])
         subprocess.run(["sudo", "apt-get", "install", "-y"] + missing_apt)
     else:
-        print("\n━━━ [1/4] APT: All installed ✅ ━━━")
+        print("\n━━━ [1/2] APT: All installed ✅ ━━━")
     
-    # [2] PIP
-    missing_pip = [pkg for cmd, pkg in pip_tools.items() if not shutil.which(cmd)]
-    if missing_pip:
-        print(f"\n━━━ [2/4] PIP: {len(missing_pip)} packages ━━━")
-        print(f"    {', '.join(missing_pip)}\n")
-        subprocess.run([sys.executable, "-m", "pip", "install", "--break-system-packages"] + missing_pip)
-    else:
-        print("\n━━━ [2/4] PIP: All installed ✅ ━━━")
-    
-    # [3] GO (check again after apt)
+    # [2] GO (check again after apt)
     missing_go = [cmd for cmd in go_tools.keys() if not shutil.which(cmd)]
     if missing_go:
         go_bin = shutil.which("go") or "/usr/bin/go"
         if os.path.exists(go_bin):
-            print(f"\n━━━ [3/3] GO: {len(missing_go)} tools ━━━")
+            print(f"\n━━━ [2/2] GO: {len(missing_go)} tools ━━━")
             go_path = os.path.expanduser("~/go")
             os.makedirs(f"{go_path}/bin", exist_ok=True)
             os.environ["GOPATH"] = go_path
@@ -166,13 +151,12 @@ def auto_install_system_tools():
                 print(f"    Installing {tool}...")
                 subprocess.run([go_bin, "install", go_tools[tool]], env=os.environ)
         else:
-            print("\n━━━ [3/3] GO: Go not found ━━━")
+            print("\n━━━ [2/2] GO: Go not found ━━━")
     else:
-        print("\n━━━ [3/3] GO: All installed ✅ ━━━")
+        print("\n━━━ [2/2] GO: All installed ✅ ━━━")
     
     # Final count
     installed = sum(1 for cmd in apt_tools.keys() if shutil.which(cmd))
-    installed += sum(1 for cmd in pip_tools.keys() if shutil.which(cmd))
     installed += sum(1 for cmd in go_tools.keys() if shutil.which(cmd))
     
     print(f"\n════════════════════════════════════════")
@@ -255,18 +239,6 @@ class CyberToolkit:
                         "cmd": "dnsx",
                         "description": "Fast DNS toolkit",
                         "example": "dnsx -d target.com"
-                    },
-                    "theHarvester": {
-                        "name": "theHarvester",
-                        "cmd": "theHarvester",
-                        "description": "E-mail and subdomain harvester",
-                        "example": "theHarvester -d target.com -b all"
-                    },
-                    "sherlock": {
-                        "name": "Sherlock",
-                        "cmd": "sherlock",
-                        "description": "Hunt usernames across social networks",
-                        "example": "sherlock username"
                     }
                 }
             },
