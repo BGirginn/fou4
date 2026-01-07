@@ -71,7 +71,7 @@ def auto_install_dependencies(silent: bool = False) -> bool:
 
 
 def auto_install_system_tools():
-    """Automatically detect and install missing system tools."""
+    """Automatically detect and install ALL missing system tools in one run."""
     
     # APT packages (cmd -> package)
     apt_tools = {
@@ -97,7 +97,6 @@ def auto_install_system_tools():
         "gem": "ruby-full",
     }
     
-    # PIP packages
     pip_tools = {
         "theHarvester": "theHarvester",
         "sherlock": "sherlock-project",
@@ -106,7 +105,6 @@ def auto_install_system_tools():
         "evil-winrm": "evil-winrm",
     }
     
-    # Go tools
     go_tools = {
         "subfinder": "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
         "httpx": "github.com/projectdiscovery/httpx/cmd/httpx@latest",
@@ -116,69 +114,77 @@ def auto_install_system_tools():
         "amass": "github.com/owasp-amass/amass/v4/...@master",
     }
     
-    # Ruby gems
     gem_tools = {"wpscan": "wpscan"}
     
-    # Detect missing
-    missing_apt = [pkg for cmd, pkg in apt_tools.items() if not shutil.which(cmd)]
-    missing_pip = [pkg for cmd, pkg in pip_tools.items() if not shutil.which(cmd)]
-    missing_go = [cmd for cmd in go_tools.keys() if not shutil.which(cmd)]
-    missing_gem = [pkg for cmd, pkg in gem_tools.items() if not shutil.which(cmd)]
-    
+    # Count total
     total = len(apt_tools) + len(pip_tools) + len(go_tools) + len(gem_tools)
-    missing = len(missing_apt) + len(missing_pip) + len(missing_go) + len(missing_gem)
     
-    print(f"\n🔍 Tool Status: {total - missing}/{total} installed")
+    # Detect missing APT
+    missing_apt = [pkg for cmd, pkg in apt_tools.items() if not shutil.which(cmd)]
     
-    if missing == 0:
-        print("✅ All tools ready!\n")
-        return
+    print(f"\n🔍 Scanning {total} tools...")
     
-    print(f"📦 Installing {missing} missing tools...\n")
-    
-    # [1] APT packages
+    # [1] Install APT first (includes Go and Ruby)
     if missing_apt:
-        print(f"━━━ [1/4] APT: {len(missing_apt)} packages ━━━")
-        print(f"    {', '.join(missing_apt)}\n")
+        print(f"\n━━━ [1/4] APT: {len(missing_apt)} packages ━━━")
+        print(f"    {', '.join(missing_apt[:10])}{'...' if len(missing_apt) > 10 else ''}\n")
         subprocess.run(["sudo", "apt-get", "update"])
         subprocess.run(["sudo", "apt-get", "install", "-y"] + missing_apt)
-        print()
+    else:
+        print("\n━━━ [1/4] APT: All installed ✅ ━━━")
     
-    # [2] PIP packages
+    # [2] Install PIP packages
+    missing_pip = [pkg for cmd, pkg in pip_tools.items() if not shutil.which(cmd)]
     if missing_pip:
-        print(f"━━━ [2/4] PIP: {len(missing_pip)} packages ━━━")
+        print(f"\n━━━ [2/4] PIP: {len(missing_pip)} packages ━━━")
         print(f"    {', '.join(missing_pip)}\n")
         subprocess.run([sys.executable, "-m", "pip", "install", "--break-system-packages"] + missing_pip)
-        print()
+    else:
+        print("\n━━━ [2/4] PIP: All installed ✅ ━━━")
     
-    # [3] Go tools
+    # [3] Install Go tools (check go again - it may have just been installed)
+    missing_go = [cmd for cmd in go_tools.keys() if not shutil.which(cmd)]
     if missing_go:
-        if shutil.which("go"):
-            print(f"━━━ [3/4] GO: {len(missing_go)} tools ━━━")
+        # Check for go binary (might be in /usr/bin after apt install)
+        go_bin = shutil.which("go") or "/usr/bin/go"
+        if os.path.exists(go_bin):
+            print(f"\n━━━ [3/4] GO: {len(missing_go)} tools ━━━")
             go_path = os.path.expanduser("~/go")
+            os.makedirs(f"{go_path}/bin", exist_ok=True)
             os.environ["GOPATH"] = go_path
-            os.environ["PATH"] = f"{go_path}/bin:{os.environ.get('PATH', '')}"
+            os.environ["PATH"] = f"{go_path}/bin:/usr/local/go/bin:{os.environ.get('PATH', '')}"
+            
             for tool in missing_go:
                 print(f"    Installing {tool}...")
-                subprocess.run(["go", "install", go_tools[tool]], env=os.environ)
-            print()
+                subprocess.run([go_bin, "install", go_tools[tool]], env=os.environ)
         else:
-            print("━━━ [3/4] GO: Skipped (run again after Go installed) ━━━\n")
+            print("\n━━━ [3/4] GO: Go not found ━━━")
+    else:
+        print("\n━━━ [3/4] GO: All installed ✅ ━━━")
     
-    # [4] Ruby gems
+    # [4] Install Ruby gems (check gem again - it may have just been installed)
+    missing_gem = [pkg for cmd, pkg in gem_tools.items() if not shutil.which(cmd)]
     if missing_gem:
-        if shutil.which("gem"):
-            print(f"━━━ [4/4] GEM: {len(missing_gem)} packages ━━━")
+        gem_bin = shutil.which("gem") or "/usr/bin/gem"
+        if os.path.exists(gem_bin):
+            print(f"\n━━━ [4/4] GEM: {len(missing_gem)} packages ━━━")
             for gem in missing_gem:
                 print(f"    Installing {gem}...")
-                subprocess.run(["sudo", "gem", "install", gem])
-            print()
+                subprocess.run(["sudo", gem_bin, "install", gem])
         else:
-            print("━━━ [4/4] GEM: Skipped (run again after Ruby installed) ━━━\n")
+            print("\n━━━ [4/4] GEM: Ruby not found ━━━")
+    else:
+        print("\n━━━ [4/4] GEM: All installed ✅ ━━━")
     
-    print("════════════════════════════════════════")
-    print("✅ Tool installation complete!")
-    print("════════════════════════════════════════\n")
+    # Final count
+    installed = sum(1 for cmd in apt_tools.keys() if shutil.which(cmd))
+    installed += sum(1 for cmd in pip_tools.keys() if shutil.which(cmd))
+    installed += sum(1 for cmd in go_tools.keys() if shutil.which(cmd))
+    installed += sum(1 for cmd in gem_tools.keys() if shutil.which(cmd))
+    
+    print(f"\n════════════════════════════════════════")
+    print(f"✅ Complete! {installed}/{total} tools installed")
+    print(f"════════════════════════════════════════\n")
 
 
 # Run dependency check on every startup
