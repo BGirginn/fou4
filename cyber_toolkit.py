@@ -101,7 +101,7 @@ def auto_install_system_tools():
     total = len(apt_tools) + len(pip_tools) + len(go_tools)
     installed = total - len(missing_apt) - len(missing_pip) - len(missing_go)
     
-    print(f"🔍 Tool Status: {installed}/{total} installed")
+    print(f"\n🔍 Tool Status: {installed}/{total} installed")
     
     if not missing_apt and not missing_pip and not missing_go:
         print("✅ All tools ready!\n")
@@ -109,43 +109,41 @@ def auto_install_system_tools():
     
     print(f"📦 Installing {len(missing_apt) + len(missing_pip) + len(missing_go)} missing tools...\n")
     
-    # Install APT packages
+    # Install APT packages (visible output)
     if missing_apt:
-        print(f"  [APT] {len(missing_apt)} packages...", end=" ", flush=True)
-        subprocess.run(["sudo", "apt-get", "update", "-qq"], capture_output=True)
-        result = subprocess.run(
-            ["sudo", "apt-get", "install", "-y", "-qq"] + missing_apt,
-            capture_output=True
-        )
-        print("✅" if result.returncode == 0 else "⚠️ partial")
+        print(f"━━━ [1/3] APT: {len(missing_apt)} packages ━━━")
+        print(f"    Packages: {', '.join(missing_apt)}\n")
+        subprocess.run(["sudo", "apt-get", "update"])
+        result = subprocess.run(["sudo", "apt-get", "install", "-y"] + missing_apt)
+        print("✅ APT done!\n" if result.returncode == 0 else "⚠️ APT partial\n")
     
-    # Install PIP packages
+    # Install PIP packages (visible output)
     if missing_pip:
-        print(f"  [PIP] {len(missing_pip)} packages...", end=" ", flush=True)
+        print(f"━━━ [2/3] PIP: {len(missing_pip)} packages ━━━")
+        print(f"    Packages: {', '.join(missing_pip)}\n")
         result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-q", "--break-system-packages"] + missing_pip,
-            capture_output=True
+            [sys.executable, "-m", "pip", "install", "--break-system-packages"] + missing_pip
         )
-        print("✅" if result.returncode == 0 else "⚠️ partial")
+        print("✅ PIP done!\n" if result.returncode == 0 else "⚠️ PIP partial\n")
     
-    # Install Go tools
+    # Install Go tools (visible output)
     if missing_go:
         if shutil.which("go"):
-            print(f"  [GO] {len(missing_go)} tools...", end=" ", flush=True)
+            print(f"━━━ [3/3] GO: {len(missing_go)} tools ━━━")
             go_path = os.path.expanduser("~/go")
             os.environ["GOPATH"] = go_path
             os.environ["PATH"] = f"{go_path}/bin:{os.environ.get('PATH', '')}"
             
-            success = 0
             for tool in missing_go:
-                r = subprocess.run(["go", "install", go_tools[tool]], capture_output=True, env=os.environ)
-                if r.returncode == 0:
-                    success += 1
-            print(f"✅ {success}/{len(missing_go)}")
+                print(f"\n    Installing {tool}...")
+                subprocess.run(["go", "install", go_tools[tool]], env=os.environ)
+            print("\n✅ GO done!\n")
         else:
-            print("  [GO] Skipped (Go not installed)")
+            print("━━━ [3/3] GO: Skipped (install Go first) ━━━\n")
     
-    print("\n✅ Setup complete!\n")
+    print("════════════════════════════════════════")
+    print("✅ Tool installation complete!")
+    print("════════════════════════════════════════\n")
 
 
 # Run dependency check on every startup
