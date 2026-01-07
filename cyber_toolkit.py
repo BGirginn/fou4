@@ -1129,13 +1129,23 @@ def check_system_requirements() -> bool:
 def main():
     """Entry point."""
     try:
-        # System requirements check
-        if not check_system_requirements():
-            if not Confirm.ask("[yellow]Continue despite missing requirements?[/yellow]", default=False):
-                console.print("[yellow]Exiting. Please install required dependencies.[/yellow]")
-                sys.exit(1)
+        # Fully automatic system check and installation
+        console.print("\n[bold cyan]🔧 FOU4 - Automatic Setup[/bold cyan]\n")
         
-        input("\nPress Enter to continue...")
+        # Check and install/update everything automatically
+        requirements_ok = check_system_requirements()
+        
+        if not requirements_ok:
+            console.print("\n[bold yellow]⚡ Installing missing components...[/bold yellow]\n")
+            
+            # Install all missing dependencies and tools
+            auto_install_dependencies(silent=False)
+            auto_install_system_tools()
+            
+            console.print("\n[bold]📋 Final system status:[/bold]")
+            check_system_requirements()
+        
+        console.print("\n[green]✓ Setup complete! Starting FOU4...[/green]")
         
         toolkit = CyberToolkit()
         toolkit.run()
