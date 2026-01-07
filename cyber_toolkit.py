@@ -48,7 +48,7 @@ def auto_install_dependencies(silent: bool = False) -> bool:
     try:
         # Install/upgrade all requirements
         result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-q", "--upgrade", "-r", str(requirements_file)],
+            [sys.executable, "-m", "pip", "install", "-q", "--upgrade", "--break-system-packages", "-r", str(requirements_file)],
             capture_output=True,
             text=True
         )
