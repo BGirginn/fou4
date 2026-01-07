@@ -614,32 +614,46 @@ class CyberToolkit:
         """Execute command and save results."""
         console.print(f"\n[yellow]Executing: {cmd}[/yellow]\n")
         
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        result_file = self.results_dir / f"{tool_name.lower()}_{timestamp}.txt"
+        output_lines = []
         
         try:
+            process = subprocess.Popen(
+                cmd,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True
+            )
+            
+            for line in iter(process.stdout.readline, ''):
+                console.print(line, end='')
+                output_lines.append(line)
+            
+            process.wait()
+            
+            # Display full results in a panel
+            full_output = ''.join(output_lines)
+            console.print(Panel(full_output, title=f"[bold]{tool_name} Results[/bold]", border_style="green"))
+            
+            # Ask for custom filename
+            default_name = f"{tool_name.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            custom_name = Prompt.ask("\nSave results as", default=default_name)
+            
+            # Ensure .txt extension
+            if not custom_name.endswith('.txt'):
+                custom_name += '.txt'
+            
+            result_file = self.results_dir / custom_name
+            
             with open(result_file, 'w') as f:
                 f.write(f"# {tool_name} Results\n")
                 f.write(f"# Command: {cmd}\n")
                 f.write(f"# Timestamp: {datetime.now().isoformat()}\n")
                 f.write(f"# Target: {self.current_target}\n")
                 f.write("=" * 60 + "\n\n")
-                
-                process = subprocess.Popen(
-                    cmd,
-                    shell=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True
-                )
-                
-                for line in iter(process.stdout.readline, ''):
-                    console.print(line, end='')
-                    f.write(line)
-                
-                process.wait()
+                f.write(full_output)
             
-            console.print(f"\n[green]Results saved to: {result_file}[/green]")
+            console.print(f"\n[green]✅ Results saved to: {result_file}[/green]")
         
         except KeyboardInterrupt:
             console.print("\n[yellow]Scan interrupted by user[/yellow]")
