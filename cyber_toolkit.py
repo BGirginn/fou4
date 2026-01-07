@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FOU4TK v5.0 - Unified Security Testing Interface
+FOU4 v5.0 - Unified Security Testing Interface
 A terminal-based toolkit for penetration testing and security assessment.
 """
 
@@ -14,13 +14,11 @@ from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 
 
-def auto_install_dependencies():
-    """Automatically install missing dependencies from requirements.txt."""
+def ensure_requirements_file() -> Path:
+    """Ensure requirements.txt exists with all dependencies."""
     requirements_file = Path(__file__).parent / "requirements.txt"
     
-    if not requirements_file.exists():
-        print("⚠️  requirements.txt not found, creating...")
-        requirements_file.write_text("""rich>=13.0.0
+    required_content = """rich>=13.0.0
 pyyaml>=6.0
 click>=8.0
 python-dotenv>=1.0
@@ -31,24 +29,105 @@ fastapi>=0.109.0
 uvicorn>=0.27.0
 PyJWT>=2.8.0
 websockets>=12.0
-""")
+"""
     
-    print("📦 Installing dependencies from requirements.txt...")
-    print("   This may take a minute on first run...\n")
+    if not requirements_file.exists():
+        print("⚠️  requirements.txt not found, creating...")
+        requirements_file.write_text(required_content)
+    
+    return requirements_file
+
+
+def auto_install_dependencies(silent: bool = False) -> bool:
+    """Automatically install/update all dependencies from requirements.txt."""
+    requirements_file = ensure_requirements_file()
+    
+    if not silent:
+        print("📦 Checking and installing dependencies...")
     
     try:
-        subprocess.check_call([
-            sys.executable, "-m", "pip", "install", "-q", "-r", str(requirements_file)
-        ])
-        print("✅ Dependencies installed successfully!\n")
-        return True
+        # Install/upgrade all requirements (with --user for macOS compatibility)
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-q", "--user", "--upgrade", "-r", str(requirements_file)],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0:
+            if not silent:
+                print("✅ Dependencies verified!\n")
+            return True
+        else:
+            # Try with --break-system-packages as fallback
+            result2 = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "-q", "--break-system-packages", "-r", str(requirements_file)],
+                capture_output=True,
+                text=True
+            )
+            if result2.returncode == 0:
+                if not silent:
+                    print("✅ Dependencies verified!\n")
+                return True
+            # Continue anyway even if install fails
+            if not silent:
+                print("⚠️  Dependency installation skipped (packages may already exist)")
+            return True
     except subprocess.CalledProcessError as e:
         print(f"❌ Failed to install dependencies: {e}")
-        print("   Try manually: pip3 install -r requirements.txt")
+        print("   Try manually: pip3 install --user -r requirements.txt")
         return False
+    except Exception as e:
+        print(f"⚠️  Dependency check warning: {e}")
+        return True  # Continue anyway
 
 
-# Try importing Rich, auto-install if not found
+def install_system_tools() -> dict:
+    """Check and attempt to install missing system tools."""
+    results = {"installed": [], "missing": [], "failed": []}
+    
+    # Tools that can be installed via pip
+    pip_tools = {
+        "sqlmap": "sqlmap",
+        "wfuzz": "wfuzz", 
+        "theHarvester": "theHarvester",
+    }
+    
+    # Tools that need apt/brew
+    system_tools = {
+        "nmap": {"apt": "nmap", "brew": "nmap"},
+        "curl": {"apt": "curl", "brew": "curl"},
+        "git": {"apt": "git", "brew": "git"},
+        "nikto": {"apt": "nikto", "brew": "nikto"},
+        "hydra": {"apt": "hydra", "brew": "hydra"},
+        "john": {"apt": "john", "brew": "john"},
+        "tcpdump": {"apt": "tcpdump", "brew": "tcpdump"},
+        "wireshark": {"apt": "wireshark", "brew": "wireshark"},
+    }
+    
+    # Go tools
+    go_tools = {
+        "subfinder": "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
+        "httpx": "github.com/projectdiscovery/httpx/cmd/httpx@latest",
+        "nuclei": "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest",
+        "ffuf": "github.com/ffuf/ffuf/v2@latest",
+        "dnsx": "github.com/projectdiscovery/dnsx/cmd/dnsx@latest",
+        "gobuster": "github.com/OJ/gobuster/v3@latest",
+    }
+    
+    # Check each tool and record status
+    for tool in list(pip_tools.keys()) + list(system_tools.keys()) + list(go_tools.keys()):
+        if shutil.which(tool):
+            results["installed"].append(tool)
+        else:
+            results["missing"].append(tool)
+    
+    return results
+
+
+# Run dependency check on every startup
+print("\n🔧 FOU4 - Startup Check\n")
+auto_install_dependencies(silent=False)
+
+# Try importing Rich
 try:
     from rich.console import Console
     from rich.table import Table
@@ -60,27 +139,10 @@ try:
     from rich.columns import Columns
     from rich.markdown import Markdown
 except ImportError:
-    print("\n🔧 FOU4TK - First Run Setup\n")
-    print("Required packages not found. Installing automatically...\n")
-    
-    if auto_install_dependencies():
-        # Retry imports after installation
-        try:
-            from rich.console import Console
-            from rich.table import Table
-            from rich.panel import Panel
-            from rich.prompt import Prompt, Confirm
-            from rich.progress import Progress, SpinnerColumn, TextColumn
-            from rich.text import Text
-            from rich import box
-            from rich.columns import Columns
-            from rich.markdown import Markdown
-        except ImportError:
-            print("❌ Failed to import packages after installation.")
-            print("   Please restart the application.")
-            sys.exit(1)
-    else:
-        sys.exit(1)
+    print("\n❌ Rich library not available after installation.")
+    print("   Please run: pip3 install rich")
+    print("   Then restart the application.")
+    sys.exit(1)
 
 # Initialize Rich console
 console = Console()
@@ -466,24 +528,23 @@ class CyberToolkit:
     def show_banner(self):
         """Display the application banner."""
         banner = """
-╔═══════════════════════════════════════════════════════════════════════════╗
-║                                                                           ║
-║         ███████╗ ██████╗ ██╗   ██╗██╗  ██╗    ████████╗██╗  ██╗           ║
-║         ██╔════╝██╔═══██╗██║   ██║██║  ██║    ╚══██╔══╝██║ ██╔╝           ║
-║         █████╗  ██║   ██║██║   ██║███████║       ██║   █████╔╝            ║
-║         ██╔══╝  ██║   ██║██║   ██║╚════██║       ██║   ██╔═██╗            ║
-║         ██║     ╚██████╔╝╚██████╔╝     ██║       ██║   ██║  ██╗           ║
-║         ╚═╝      ╚═════╝  ╚═════╝      ╚═╝       ╚═╝   ╚═╝  ╚═╝           ║
-║                                                                           ║
-║                    𝗨𝗡𝗜𝗙𝗜𝗘𝗗 𝗦𝗘𝗖𝗨𝗥𝗜𝗧𝗬 𝗧𝗘𝗦𝗧𝗜𝗡𝗚 𝗜𝗡𝗧𝗘𝗥𝗙𝗔𝗖𝗘                      ║
-║                                                                           ║
-╚═══════════════════════════════════════════════════════════════════════════╝
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                                                                              │
+│    ╔═══╗  ╔═══╗  ╦   ╦  ╦   ╦                                                │
+│    ║      ║   ║  ║   ║  ║   ║                                                │
+│    ╠═══   ║   ║  ║   ║  ╠═══╣                                                │
+│    ║      ║   ║  ║   ║      ║                                                │
+│    ║      ╚═══╝  ╚═══╝      ║                                                │
+│                                                                              │
+│                    UNIFIED SECURITY TESTING INTERFACE                        │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
 """
         console.print(banner, style="bold cyan")
         console.print(f"  [dim]Version {VERSION} '{CODENAME}'[/dim]  |  [dim]{len(self._get_all_tools())} Tools[/dim]  |  [dim]{len(self.tools)} Categories[/dim]\n")
         
         if self.current_target:
-            console.print(f"  [yellow]🎯 Current Target:[/yellow] [bold green]{self.current_target}[/bold green]\n")
+            console.print(f"  [yellow]Target:[/yellow] [bold green]{self.current_target}[/bold green]\n")
     
     def _get_all_tools(self) -> List[Tuple[str, dict]]:
         """Get flat list of all tools."""
@@ -804,7 +865,7 @@ nuclei -update-templates
                 choice = Prompt.ask("\n[bold cyan]Select option[/bold cyan]", default="0")
                 
                 if choice == "0":
-                    console.print("\n[green]Thanks for using CyberToolkit! Stay ethical! 🛡️[/green]")
+                    console.print("\n[green]Thanks for using FOU4! Stay ethical![/green]")
                     break
                 
                 elif choice == "8":
@@ -851,13 +912,14 @@ nuclei -update-templates
 
 def check_system_requirements() -> bool:
     """
-    Check if all system requirements are met before starting.
+    Check if all system requirements are met and install missing ones.
     Returns True if all critical requirements pass.
     """
-    console.print("\n[bold cyan]═══ FOU4TK System Requirements Check ═══[/bold cyan]\n")
+    console.print("\n[bold cyan]═══ FOU4 System Requirements Check ═══[/bold cyan]\n")
     
     all_passed = True
     warnings = []
+    missing_pip_packages = []
     
     # 1. Python version check
     py_version = sys.version_info
@@ -867,37 +929,44 @@ def check_system_requirements() -> bool:
         console.print(f"  [red]✗[/red] Python {py_version.major}.{py_version.minor} (3.8+ required)")
         all_passed = False
     
-    # 2. Required Python packages
+    # 2. Required Python packages - check and install
     required_packages = [
-        ('rich', 'Rich TUI'),
-        ('yaml', 'PyYAML'),
-        ('click', 'CLI'),
-        ('dotenv', 'Environment'),
-    ]
-    
-    optional_packages = [
-        ('sqlalchemy', 'Database'),
-        ('fastapi', 'API Server'),
-        ('requests', 'HTTP Client'),
+        ('rich', 'Rich TUI', 'rich'),
+        ('yaml', 'PyYAML', 'pyyaml'),
+        ('click', 'CLI', 'click'),
+        ('dotenv', 'Environment', 'python-dotenv'),
+        ('sqlalchemy', 'Database', 'sqlalchemy'),
+        ('fastapi', 'API Server', 'fastapi'),
+        ('requests', 'HTTP Client', 'requests'),
+        ('pydantic', 'Validation', 'pydantic'),
+        ('uvicorn', 'ASGI Server', 'uvicorn'),
+        ('jwt', 'JWT Auth', 'PyJWT'),
+        ('websockets', 'WebSockets', 'websockets'),
     ]
     
     console.print("\n  [bold]Python Packages:[/bold]")
     
-    for package, name in required_packages:
+    for package, name, pip_name in required_packages:
         try:
             __import__(package)
             console.print(f"    [green]✓[/green] {name}")
         except ImportError:
-            console.print(f"    [red]✗[/red] {name} (required)")
-            all_passed = False
+            console.print(f"    [yellow]○[/yellow] {name} (installing...)")
+            missing_pip_packages.append(pip_name)
     
-    for package, name in optional_packages:
+    # Install missing pip packages
+    if missing_pip_packages:
+        console.print(f"\n  [cyan]Installing {len(missing_pip_packages)} missing packages...[/cyan]")
         try:
-            __import__(package)
-            console.print(f"    [green]✓[/green] {name}")
-        except ImportError:
-            console.print(f"    [yellow]○[/yellow] {name} (optional)")
-            warnings.append(f"{name} not installed - some features disabled")
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "-q"] + missing_pip_packages,
+                capture_output=True,
+                check=True
+            )
+            console.print(f"  [green]✓[/green] Packages installed successfully!")
+        except subprocess.CalledProcessError as e:
+            console.print(f"  [red]✗[/red] Failed to install some packages")
+            warnings.append("Some Python packages could not be installed")
     
     # 3. Core security tools
     core_tools = [
@@ -912,6 +981,11 @@ def check_system_requirements() -> bool:
         ('subfinder', 'Subfinder'),
         ('httpx', 'HTTPx'),
         ('sqlmap', 'SQLMap'),
+        ('gobuster', 'Gobuster'),
+        ('nikto', 'Nikto'),
+        ('hydra', 'Hydra'),
+        ('john', 'John'),
+        ('hashcat', 'Hashcat'),
     ]
     
     console.print("\n  [bold]Core Tools:[/bold]")
@@ -923,18 +997,20 @@ def check_system_requirements() -> bool:
             console.print(f"    [red]✗[/red] {name} (required)")
             all_passed = False
     
-    console.print("\n  [bold]Recommended Tools:[/bold]")
+    console.print("\n  [bold]Security Tools:[/bold]")
     
     installed_count = 0
+    missing_tools = []
     for cmd, name in recommended_tools:
         if shutil.which(cmd):
             console.print(f"    [green]✓[/green] {name}")
             installed_count += 1
         else:
             console.print(f"    [yellow]○[/yellow] {name}")
+            missing_tools.append(cmd)
     
-    if installed_count < 3:
-        warnings.append(f"Only {installed_count}/5 recommended tools installed")
+    if missing_tools:
+        warnings.append(f"{len(missing_tools)} security tools not installed")
     
     # 4. Directory permissions
     console.print("\n  [bold]Directories:[/bold]")
@@ -962,12 +1038,16 @@ def check_system_requirements() -> bool:
         console.print("\n  [bold green]✓ All critical requirements passed![/bold green]")
     else:
         console.print("\n  [bold red]✗ Some critical requirements failed![/bold red]")
-        console.print("    Run 'pip install -r requirements.txt' to install packages")
     
     if warnings:
         console.print("\n  [yellow]Warnings:[/yellow]")
         for warning in warnings:
             console.print(f"    [dim]• {warning}[/dim]")
+    
+    if missing_tools:
+        console.print("\n  [dim]To install missing tools:[/dim]")
+        console.print("  [dim]  Debian/Kali: sudo apt install <tool>[/dim]")
+        console.print("  [dim]  Go tools: go install github.com/...@latest[/dim]")
     
     console.print()
     
