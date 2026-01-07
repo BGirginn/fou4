@@ -13,6 +13,11 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 
+# Add Go and pip bin directories to PATH for tool detection
+go_bin = os.path.expanduser("~/go/bin")
+local_bin = os.path.expanduser("~/.local/bin")
+os.environ["PATH"] = f"{go_bin}:{local_bin}:{os.environ.get('PATH', '')}"
+
 
 def ensure_requirements_file() -> Path:
     """Ensure requirements.txt exists with all dependencies."""
@@ -88,15 +93,13 @@ def auto_install_system_tools():
         "tshark": "tshark",
         "tcpdump": "tcpdump",
         "nc": "netcat-traditional",
-        "ncat": "ncat",
-        # Password & Wordlists
+        # Password
         "hydra": "hydra",
         "john": "john",
         "hashcat": "hashcat",
         "medusa": "medusa",
         "crunch": "crunch",
         "cewl": "cewl",
-        "ophcrack": "ophcrack",
         # Wireless
         "aircrack-ng": "aircrack-ng",
         "reaver": "reaver",
@@ -370,13 +373,7 @@ class CyberToolkit:
                         "cmd": "nc",
                         "description": "Network utility for TCP/UDP",
                         "example": "nc -lvnp 4444"
-                    },
-                    "ncat": {
-                        "name": "Ncat",
-                        "cmd": "ncat",
-                        "description": "Improved netcat from Nmap",
-                        "example": "ncat -lvnp 4444"
-                    },
+                    }
                 }
             },
             "exploit": {
@@ -430,12 +427,6 @@ class CyberToolkit:
                         "cmd": "cewl",
                         "description": "Custom wordlist generator from websites",
                         "example": "cewl http://target.com -w wordlist.txt"
-                    },
-                    "ophcrack": {
-                        "name": "Ophcrack",
-                        "cmd": "ophcrack",
-                        "description": "Windows password cracker using rainbow tables",
-                        "example": "ophcrack"
                     }
                 }
             },
