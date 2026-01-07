@@ -97,15 +97,11 @@ def auto_install_system_tools():
         "crunch": "crunch",
         "cewl": "cewl",
         "ophcrack": "ophcrack",
-        # Wordlists
-        "seclists": "seclists",
-        "wordlists": "wordlists",
         # Wireless
         "aircrack-ng": "aircrack-ng",
         "reaver": "reaver",
         "wifite": "wifite",
         # Utils
-        "searchsploit": "exploitdb",
         "curl": "curl",
         "git": "git",
         "wget": "wget",
@@ -440,12 +436,6 @@ class CyberToolkit:
                         "cmd": "ophcrack",
                         "description": "Windows password cracker using rainbow tables",
                         "example": "ophcrack"
-                    },
-                    "seclists": {
-                        "name": "SecLists",
-                        "cmd": "seclists",
-                        "description": "Collection of security wordlists",
-                        "example": "ls /usr/share/seclists/"
                     }
                 }
             },
