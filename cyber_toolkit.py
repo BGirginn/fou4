@@ -73,73 +73,108 @@ def auto_install_dependencies(silent: bool = False) -> bool:
 def auto_install_system_tools():
     """Automatically detect and install missing system tools."""
     
-    # Tool definitions
+    # APT packages (cmd -> package)
     apt_tools = {
+        # Core
         "nmap": "nmap", "curl": "curl", "git": "git", "wget": "wget", "jq": "jq",
-        "nikto": "nikto", "hydra": "hydra", "john": "john", "hashcat": "hashcat",
-        "sqlmap": "sqlmap", "tcpdump": "tcpdump", "wireshark": "wireshark",
-        "nc": "netcat-traditional", "masscan": "masscan", "aircrack-ng": "aircrack-ng",
-        "reaver": "reaver", "wifite": "wifite", "medusa": "medusa", "crunch": "crunch",
-        "cewl": "cewl", "dirb": "dirb", "gobuster": "gobuster", "go": "golang-go",
+        # Web
+        "nikto": "nikto", "gobuster": "gobuster", "sqlmap": "sqlmap", "dirb": "dirb",
+        # Network
+        "tcpdump": "tcpdump", "wireshark": "wireshark", "tshark": "tshark",
+        "nc": "netcat-traditional", "ncat": "ncat", "bettercap": "bettercap",
+        # Password
+        "hydra": "hydra", "john": "john", "hashcat": "hashcat", 
+        "medusa": "medusa", "crunch": "crunch", "cewl": "cewl",
+        # Recon
+        "masscan": "masscan",
+        # Wireless
+        "aircrack-ng": "aircrack-ng", "reaver": "reaver", "wifite": "wifite",
+        # Utils
+        "searchsploit": "exploitdb",
+        # Go language
+        "go": "golang-go",
+        # Ruby (for wpscan)
+        "gem": "ruby-full",
     }
     
-    pip_tools = {"theHarvester": "theHarvester", "sherlock": "sherlock-project"}
+    # PIP packages
+    pip_tools = {
+        "theHarvester": "theHarvester",
+        "sherlock": "sherlock-project",
+        "crackmapexec": "crackmapexec",
+        "impacket-smbclient": "impacket",
+        "evil-winrm": "evil-winrm",
+    }
     
+    # Go tools
     go_tools = {
         "subfinder": "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
         "httpx": "github.com/projectdiscovery/httpx/cmd/httpx@latest",
         "nuclei": "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest",
         "ffuf": "github.com/ffuf/ffuf/v2@latest",
         "dnsx": "github.com/projectdiscovery/dnsx/cmd/dnsx@latest",
+        "amass": "github.com/owasp-amass/amass/v4/...@master",
     }
     
-    # Detect missing tools
+    # Ruby gems
+    gem_tools = {"wpscan": "wpscan"}
+    
+    # Detect missing
     missing_apt = [pkg for cmd, pkg in apt_tools.items() if not shutil.which(cmd)]
     missing_pip = [pkg for cmd, pkg in pip_tools.items() if not shutil.which(cmd)]
     missing_go = [cmd for cmd in go_tools.keys() if not shutil.which(cmd)]
+    missing_gem = [pkg for cmd, pkg in gem_tools.items() if not shutil.which(cmd)]
     
-    total = len(apt_tools) + len(pip_tools) + len(go_tools)
-    installed = total - len(missing_apt) - len(missing_pip) - len(missing_go)
+    total = len(apt_tools) + len(pip_tools) + len(go_tools) + len(gem_tools)
+    missing = len(missing_apt) + len(missing_pip) + len(missing_go) + len(missing_gem)
     
-    print(f"\n🔍 Tool Status: {installed}/{total} installed")
+    print(f"\n🔍 Tool Status: {total - missing}/{total} installed")
     
-    if not missing_apt and not missing_pip and not missing_go:
+    if missing == 0:
         print("✅ All tools ready!\n")
         return
     
-    print(f"📦 Installing {len(missing_apt) + len(missing_pip) + len(missing_go)} missing tools...\n")
+    print(f"📦 Installing {missing} missing tools...\n")
     
-    # Install APT packages (visible output)
+    # [1] APT packages
     if missing_apt:
-        print(f"━━━ [1/3] APT: {len(missing_apt)} packages ━━━")
-        print(f"    Packages: {', '.join(missing_apt)}\n")
+        print(f"━━━ [1/4] APT: {len(missing_apt)} packages ━━━")
+        print(f"    {', '.join(missing_apt)}\n")
         subprocess.run(["sudo", "apt-get", "update"])
-        result = subprocess.run(["sudo", "apt-get", "install", "-y"] + missing_apt)
-        print("✅ APT done!\n" if result.returncode == 0 else "⚠️ APT partial\n")
+        subprocess.run(["sudo", "apt-get", "install", "-y"] + missing_apt)
+        print()
     
-    # Install PIP packages (visible output)
+    # [2] PIP packages
     if missing_pip:
-        print(f"━━━ [2/3] PIP: {len(missing_pip)} packages ━━━")
-        print(f"    Packages: {', '.join(missing_pip)}\n")
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--break-system-packages"] + missing_pip
-        )
-        print("✅ PIP done!\n" if result.returncode == 0 else "⚠️ PIP partial\n")
+        print(f"━━━ [2/4] PIP: {len(missing_pip)} packages ━━━")
+        print(f"    {', '.join(missing_pip)}\n")
+        subprocess.run([sys.executable, "-m", "pip", "install", "--break-system-packages"] + missing_pip)
+        print()
     
-    # Install Go tools (visible output)
+    # [3] Go tools
     if missing_go:
         if shutil.which("go"):
-            print(f"━━━ [3/3] GO: {len(missing_go)} tools ━━━")
+            print(f"━━━ [3/4] GO: {len(missing_go)} tools ━━━")
             go_path = os.path.expanduser("~/go")
             os.environ["GOPATH"] = go_path
             os.environ["PATH"] = f"{go_path}/bin:{os.environ.get('PATH', '')}"
-            
             for tool in missing_go:
-                print(f"\n    Installing {tool}...")
+                print(f"    Installing {tool}...")
                 subprocess.run(["go", "install", go_tools[tool]], env=os.environ)
-            print("\n✅ GO done!\n")
+            print()
         else:
-            print("━━━ [3/3] GO: Skipped (install Go first) ━━━\n")
+            print("━━━ [3/4] GO: Skipped (run again after Go installed) ━━━\n")
+    
+    # [4] Ruby gems
+    if missing_gem:
+        if shutil.which("gem"):
+            print(f"━━━ [4/4] GEM: {len(missing_gem)} packages ━━━")
+            for gem in missing_gem:
+                print(f"    Installing {gem}...")
+                subprocess.run(["sudo", "gem", "install", gem])
+            print()
+        else:
+            print("━━━ [4/4] GEM: Skipped (run again after Ruby installed) ━━━\n")
     
     print("════════════════════════════════════════")
     print("✅ Tool installation complete!")
