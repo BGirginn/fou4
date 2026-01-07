@@ -46,9 +46,9 @@ def auto_install_dependencies(silent: bool = False) -> bool:
         print("📦 Checking and installing dependencies...")
     
     try:
-        # Install/upgrade all requirements (with --user for macOS compatibility)
+        # Install/upgrade all requirements
         result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-q", "--user", "--upgrade", "-r", str(requirements_file)],
+            [sys.executable, "-m", "pip", "install", "-q", "--upgrade", "-r", str(requirements_file)],
             capture_output=True,
             text=True
         )
@@ -57,23 +57,13 @@ def auto_install_dependencies(silent: bool = False) -> bool:
                 print("✅ Dependencies verified!\n")
             return True
         else:
-            # Try with --break-system-packages as fallback
-            result2 = subprocess.run(
-                [sys.executable, "-m", "pip", "install", "-q", "--break-system-packages", "-r", str(requirements_file)],
-                capture_output=True,
-                text=True
-            )
-            if result2.returncode == 0:
-                if not silent:
-                    print("✅ Dependencies verified!\n")
-                return True
-            # Continue anyway even if install fails
             if not silent:
-                print("⚠️  Dependency installation skipped (packages may already exist)")
-            return True
+                print("⚠️  Some dependencies may need manual install")
+                print(f"   Run: pip3 install -r requirements.txt")
+            return True  # Continue anyway
     except subprocess.CalledProcessError as e:
         print(f"❌ Failed to install dependencies: {e}")
-        print("   Try manually: pip3 install --user -r requirements.txt")
+        print("   Try manually: pip3 install -r requirements.txt")
         return False
     except Exception as e:
         print(f"⚠️  Dependency check warning: {e}")
