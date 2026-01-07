@@ -1,0 +1,16 @@
+{
+    "version": "1.5",
+    "results_dir": "results",
+    "log_level": "INFO",
+    "default_target": "",
+    "theme": "default",
+    "auto_save_results": true,
+    "show_timestamps": true,
+    "max_concurrent_scans": 3,
+    "timeout_seconds": 3600,
+    "api_keys": {
+        "shodan": "",
+        "virustotal": "",
+        "hunter": ""
+    }
+}

@@ -1,0 +1,73 @@
+{
+    "nmap": {
+        "quick": {
+            "name": "Quick Scan",
+            "flags": "-sV -T4 -F",
+            "description": "Fast service detection (top 100 ports)",
+            "estimated_time": "< 2 min"
+        },
+        "full": {
+            "name": "Full Scan",
+            "flags": "-sS -sV -O -p- -T4 -A",
+            "description": "Comprehensive scan all ports",
+            "estimated_time": "15-30 min"
+        },
+        "stealth": {
+            "name": "Stealth Scan",
+            "flags": "-sS -T2 -f --data-length 25",
+            "description": "Low-profile evasion scan",
+            "estimated_time": "10-20 min"
+        },
+        "vuln": {
+            "name": "Vulnerability Scan",
+            "flags": "-sV --script vuln,exploit,auth",
+            "description": "Vulnerability detection with NSE scripts",
+            "estimated_time": "20-45 min"
+        },
+        "udp": {
+            "name": "UDP Scan",
+            "flags": "-sU -sV --top-ports 100",
+            "description": "UDP service detection",
+            "estimated_time": "10-30 min"
+        }
+    },
+    "nuclei": {
+        "critical": {
+            "name": "Critical Only",
+            "flags": "-severity critical",
+            "description": "Only critical severity findings"
+        },
+        "high": {
+            "name": "High & Critical",
+            "flags": "-severity critical,high",
+            "description": "High and critical findings"
+        },
+        "medium": {
+            "name": "Medium+",
+            "flags": "-severity critical,high,medium",
+            "description": "Medium and above findings"
+        },
+        "all": {
+            "name": "All Severities",
+            "flags": "",
+            "description": "All severity levels"
+        },
+        "cves": {
+            "name": "CVE Detection",
+            "flags": "-t cves/",
+            "description": "CVE-specific templates only"
+        }
+    },
+    "ffuf": {
+        "quick": {
+            "name": "Quick Fuzz",
+            "flags": "-mc 200,301,302,403 -t 50",
+            "description": "Fast directory discovery"
+        },
+        "thorough": {
+            "name": "Thorough Fuzz",
+            "flags": "-mc all -fc 404 -t 100 -recursion -recursion-depth 2",
+            "description": "Deep recursive fuzzing"
+        }
+    }
+}

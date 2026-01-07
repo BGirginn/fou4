@@ -1,0 +1,472 @@
+"""
+FastAPI backend for CyberToolkit Web Dashboard.
+Provides REST API endpoints for project management, scans, and findings.
+"""
+
+import asyncio
+from datetime import datetime
+from pathlib import Path
+from typing import List, Optional
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
+
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from core.project import ProjectManager
+from core.database import ScanStatus, FindingStatus, Severity
+from core.integrations import IntegrationManager
+
+
+# ==================== Pydantic Models ====================
+
+class ProjectCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    description: str = ""
+    scope_type: str = "mixed"
+
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+
+
+class TargetCreate(BaseModel):
+    value: str = Field(..., min_length=1)
+    tags: List[str] = []
+    notes: str = ""
+
+
+class ScanCreate(BaseModel):
+    tool: str
+    command: str
+    target_id: Optional[int] = None
+
+
+class FindingUpdate(BaseModel):
+    status: str
+
+
+class NoteCreate(BaseModel):
+    title: str
+    content: str = ""
+    category: str = "general"
+
+
+class EnrichRequest(BaseModel):
+    ip: str
+
+
+class CVELookupRequest(BaseModel):
+    cve_id: str
+
+
+# ==================== App Setup ====================
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan handler."""
+    # Startup
+    app.state.pm = ProjectManager()
+    app.state.integrations = IntegrationManager()
+    yield
+    # Shutdown
+    app.state.pm.close()
+
+
+app = FastAPI(
+    title="CyberToolkit API",
+    description="REST API for CyberToolkit Security Platform",
+    version="3.0.0",
+    lifespan=lifespan
+)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+def get_pm() -> ProjectManager:
+    """Dependency to get ProjectManager."""
+    return app.state.pm
+
+
+def get_integrations() -> IntegrationManager:
+    """Dependency to get IntegrationManager."""
+    return app.state.integrations
+
+
+# ==================== Health & Info ====================
+
+@app.get("/")
+async def root():
+    """API root endpoint."""
+    return {
+        "name": "CyberToolkit API",
+        "version": "3.0.0",
+        "status": "running",
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy"}
+
+
+@app.get("/api/stats")
+async def get_stats(pm: ProjectManager = Depends(get_pm)):
+    """Get overall statistics."""
+    projects = pm.list_projects()
+    
+    total_targets = 0
+    total_scans = 0
+    total_findings = 0
+    
+    for project in projects:
+        total_targets += len(pm.get_targets(project.id))
+        scans = pm.get_scans(project.id)
+        total_scans += len(scans)
+        for scan in scans:
+            total_findings += len(pm.get_findings(scan_id=scan.id))
+    
+    return {
+        "total_projects": len(projects),
+        "total_targets": total_targets,
+        "total_scans": total_scans,
+        "total_findings": total_findings
+    }
+
+
+# ==================== Projects ====================
+
+@app.get("/api/projects")
+async def list_projects(
+    status: Optional[str] = None,
+    pm: ProjectManager = Depends(get_pm)
+):
+    """List all projects."""
+    projects = pm.list_projects(status=status)
+    return [p.to_dict() for p in projects]
+
+
+@app.post("/api/projects", status_code=201)
+async def create_project(
+    project: ProjectCreate,
+    pm: ProjectManager = Depends(get_pm)
+):
+    """Create a new project."""
+    existing = pm.get_project_by_name(project.name)
+    if existing:
+        raise HTTPException(status_code=409, detail="Project already exists")
+    
+    new_project = pm.create_project(
+        name=project.name,
+        description=project.description,
+        scope_type=project.scope_type
+    )
+    return new_project.to_dict()
+
+
+@app.get("/api/projects/{project_id}")
+async def get_project(
+    project_id: int,
+    pm: ProjectManager = Depends(get_pm)
+):
+    """Get project by ID."""
+    project = pm.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project.to_dict()
+
+
+@app.put("/api/projects/{project_id}")
+async def update_project(
+    project_id: int,
+    update: ProjectUpdate,
+    pm: ProjectManager = Depends(get_pm)
+):
+    """Update a project."""
+    project = pm.update_project(
+        project_id,
+        name=update.name,
+        description=update.description,
+        status=update.status
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project.to_dict()
+
+
+@app.delete("/api/projects/{project_id}")
+async def delete_project(
+    project_id: int,
+    pm: ProjectManager = Depends(get_pm)
+):
+    """Delete a project."""
+    success = pm.delete_project(project_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"deleted": True}
+
+
+@app.post("/api/projects/{project_id}/archive")
+async def archive_project(
+    project_id: int,
+    pm: ProjectManager = Depends(get_pm)
+):
+    """Archive a project."""
+    project = pm.archive_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project.to_dict()
+
+
+# ==================== Targets ====================
+
+@app.get("/api/projects/{project_id}/targets")
+async def list_targets(
+    project_id: int,
+    in_scope: Optional[bool] = None,
+    pm: ProjectManager = Depends(get_pm)
+):
+    """List targets for a project."""
+    targets = pm.get_targets(project_id, in_scope=in_scope)
+    return [t.to_dict() for t in targets]
+
+
+@app.post("/api/projects/{project_id}/targets", status_code=201)
+async def add_target(
+    project_id: int,
+    target: TargetCreate,
+    pm: ProjectManager = Depends(get_pm)
+):
+    """Add a target to a project."""
+    try:
+        new_target = pm.add_target(
+            project_id=project_id,
+            value=target.value,
+            tags=target.tags,
+            notes=target.notes
+        )
+        return new_target.to_dict()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.delete("/api/targets/{target_id}")
+async def delete_target(
+    target_id: int,
+    pm: ProjectManager = Depends(get_pm)
+):
+    """Delete a target."""
+    success = pm.delete_target(target_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Target not found")
+    return {"deleted": True}
+
+
+# ==================== Scans ====================
+
+@app.get("/api/projects/{project_id}/scans")
+async def list_scans(
+    project_id: int,
+    tool: Optional[str] = None,
+    pm: ProjectManager = Depends(get_pm)
+):
+    """List scans for a project."""
+    scans = pm.get_scans(project_id, tool=tool)
+    return [s.to_dict() for s in scans]
+
+
+@app.post("/api/projects/{project_id}/scans", status_code=201)
+async def create_scan(
+    project_id: int,
+    scan: ScanCreate,
+    background_tasks: BackgroundTasks,
+    pm: ProjectManager = Depends(get_pm)
+):
+    """Create a new scan."""
+    new_scan = pm.create_scan(
+        project_id=project_id,
+        tool=scan.tool,
+        command=scan.command,
+        target_id=scan.target_id
+    )
+    
+    # TODO: Start scan in background
+    # background_tasks.add_task(run_scan, new_scan.id)
+    
+    return new_scan.to_dict()
+
+
+@app.get("/api/scans/{scan_id}")
+async def get_scan(
+    scan_id: int,
+    pm: ProjectManager = Depends(get_pm)
+):
+    """Get scan details."""
+    # Need to add get_scan method or query directly
+    scans = pm.db.session.query(pm.db.session.query.__self__.query(
+        type(pm.db.session.query(pm.db.session)).__mro__[0]
+    ))
+    raise HTTPException(status_code=501, detail="Not implemented yet")
+
+
+# ==================== Findings ====================
+
+@app.get("/api/projects/{project_id}/findings")
+async def list_findings(
+    project_id: int,
+    severity: Optional[str] = None,
+    status: Optional[str] = None,
+    pm: ProjectManager = Depends(get_pm)
+):
+    """List findings for a project."""
+    sev = Severity(severity) if severity else None
+    stat = FindingStatus(status) if status else None
+    
+    findings = pm.get_findings(project_id=project_id, severity=sev, status=stat)
+    return [f.to_dict() for f in findings]
+
+
+@app.get("/api/projects/{project_id}/findings/stats")
+async def get_finding_stats(
+    project_id: int,
+    pm: ProjectManager = Depends(get_pm)
+):
+    """Get finding statistics for a project."""
+    return pm.get_finding_stats(project_id)
+
+
+@app.put("/api/findings/{finding_id}/status")
+async def update_finding_status(
+    finding_id: int,
+    update: FindingUpdate,
+    pm: ProjectManager = Depends(get_pm)
+):
+    """Update finding status."""
+    status = FindingStatus(update.status)
+    finding = pm.update_finding_status(finding_id, status)
+    if not finding:
+        raise HTTPException(status_code=404, detail="Finding not found")
+    return finding.to_dict()
+
+
+# ==================== Notes ====================
+
+@app.get("/api/projects/{project_id}/notes")
+async def list_notes(
+    project_id: int,
+    category: Optional[str] = None,
+    pm: ProjectManager = Depends(get_pm)
+):
+    """List notes for a project."""
+    notes = pm.get_notes(project_id, category=category)
+    return [n.to_dict() for n in notes]
+
+
+@app.post("/api/projects/{project_id}/notes", status_code=201)
+async def add_note(
+    project_id: int,
+    note: NoteCreate,
+    pm: ProjectManager = Depends(get_pm)
+):
+    """Add a note to a project."""
+    new_note = pm.add_note(
+        project_id=project_id,
+        title=note.title,
+        content=note.content,
+        category=note.category
+    )
+    return new_note.to_dict()
+
+
+# ==================== Integrations ====================
+
+@app.post("/api/enrich/ip")
+async def enrich_ip(
+    request: EnrichRequest,
+    integrations: IntegrationManager = Depends(get_integrations)
+):
+    """Enrich IP with external intelligence."""
+    result = integrations.enrich_ip(request.ip)
+    return result
+
+
+@app.post("/api/lookup/cve")
+async def lookup_cve(
+    request: CVELookupRequest,
+    integrations: IntegrationManager = Depends(get_integrations)
+):
+    """Lookup CVE details."""
+    result = integrations.lookup_cve(request.cve_id)
+    return result
+
+
+# ==================== Reports ====================
+
+@app.get("/api/projects/{project_id}/report")
+async def generate_report(
+    project_id: int,
+    format: str = Query("json", pattern="^(json|html|markdown)$"),
+    pm: ProjectManager = Depends(get_pm)
+):
+    """Generate project report."""
+    from core.reports import ReportGenerator
+    
+    rg = ReportGenerator(pm)
+    
+    try:
+        if format == "html":
+            path = rg.generate_html_report(project_id)
+        elif format == "markdown":
+            path = rg.generate_markdown_report(project_id)
+        else:
+            path = rg.generate_json_report(project_id)
+        
+        return {"path": path, "format": format}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+# ==================== Session ====================
+
+@app.get("/api/session")
+async def get_session(pm: ProjectManager = Depends(get_pm)):
+    """Get current session state."""
+    session = pm.load_session()
+    if session:
+        return session.to_dict()
+    return {"name": "default", "state": {}}
+
+
+@app.post("/api/session")
+async def save_session(
+    data: dict,
+    pm: ProjectManager = Depends(get_pm)
+):
+    """Save session state."""
+    session = pm.save_session(
+        name=data.get("name", "default"),
+        project_id=data.get("project_id"),
+        target=data.get("target", ""),
+        state=data.get("state", {})
+    )
+    return session.to_dict()
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
