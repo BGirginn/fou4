@@ -100,9 +100,7 @@ def auto_install_system_tools():
     pip_tools = {
         "theHarvester": "theHarvester",
         "sherlock": "sherlock-project",
-        "crackmapexec": "crackmapexec",
         "impacket-smbclient": "impacket",
-        "evil-winrm": "evil-winrm",
     }
     
     go_tools = {
