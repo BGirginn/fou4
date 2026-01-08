@@ -75,43 +75,89 @@ def auto_install_dependencies(silent: bool = False) -> bool:
         return True  # Continue anyway
 
 
+def get_package_manager() -> str:
+    """Detect or ask for package manager."""
+    config_file = Path(__file__).parent / "config" / "pkgmgr.txt"
+    config_file.parent.mkdir(exist_ok=True)
+    
+    # Check if already saved
+    if config_file.exists():
+        saved = config_file.read_text().strip()
+        if saved in ["apt", "pacman"]:
+            return saved
+    
+    # Auto-detect
+    if shutil.which("apt-get"):
+        detected = "apt"
+    elif shutil.which("pacman"):
+        detected = "pacman"
+    else:
+        detected = None
+    
+    # Ask user
+    print("\n╭─────────────────────────────────────╮")
+    print("│  📦 Package Manager Selection       │")
+    print("╰─────────────────────────────────────╯\n")
+    
+    if detected:
+        print(f"  Detected: [bold]{detected}[/bold]\n")
+    
+    print("  [1] apt (Debian/Ubuntu/Raspberry Pi)")
+    print("  [2] pacman (Arch Linux)")
+    
+    choice = input("\n  Select [1/2]: ").strip()
+    
+    if choice == "2":
+        pkgmgr = "pacman"
+    else:
+        pkgmgr = "apt"
+    
+    # Save choice
+    config_file.write_text(pkgmgr)
+    print(f"\n  ✅ Saved: {pkgmgr}\n")
+    
+    return pkgmgr
+
+
 def auto_install_system_tools():
     """Automatically detect and install ALL missing system tools in one run."""
     
-    # ===== APT PACKAGES =====
-    apt_tools = {
+    pkgmgr = get_package_manager()
+    
+    # ===== TOOL DEFINITIONS (cmd -> apt_pkg, pacman_pkg) =====
+    tools = {
         # Recon
-        "nmap": "nmap",
-        "masscan": "masscan", 
+        "nmap": ("nmap", "nmap"),
+        "masscan": ("masscan", "masscan"),
         # Web
-        "nikto": "nikto",
-        "gobuster": "gobuster",
-        "sqlmap": "sqlmap",
-        "dirb": "dirb",
+        "nikto": ("nikto", "nikto"),
+        "gobuster": ("gobuster", "gobuster"),
+        "sqlmap": ("sqlmap", "sqlmap"),
+        "dirb": ("dirb", "dirb"),
         # Network
-        "wireshark": "wireshark",
-        "tshark": "tshark",
-        "tcpdump": "tcpdump",
-        "nc": "netcat-traditional",
+        "wireshark": ("wireshark", "wireshark-qt"),
+        "tshark": ("tshark", "wireshark-cli"),
+        "tcpdump": ("tcpdump", "tcpdump"),
+        "nc": ("netcat-traditional", "gnu-netcat"),
         # Password
-        "hydra": "hydra",
-        "john": "john",
-        "hashcat": "hashcat",
-        "medusa": "medusa",
-        "crunch": "crunch",
-        "cewl": "cewl",
+        "hydra": ("hydra", "hydra"),
+        "john": ("john", "john"),
+        "hashcat": ("hashcat", "hashcat"),
+        "medusa": ("medusa", "medusa"),
+        "crunch": ("crunch", "crunch"),
+        "cewl": ("cewl", "cewl"),
         # Wireless
-        "aircrack-ng": "aircrack-ng",
-        "reaver": "reaver",
-        "wifite": "wifite",
+        "aircrack-ng": ("aircrack-ng", "aircrack-ng"),
+        "reaver": ("reaver", "reaver"),
+        "wifite": ("wifite", "wifite"),
         # Utils
-        "curl": "curl",
-        "git": "git",
-        "wget": "wget",
-        "jq": "jq",
-        # Languages for other tools
-        "go": "golang-go",
-        "gem": "ruby-full",
+        "curl": ("curl", "curl"),
+        "git": ("git", "git"),
+        "wget": ("wget", "wget"),
+        "jq": ("jq", "jq"),
+        # Languages
+        "go": ("golang-go", "go"),
+        "gem": ("ruby-full", "ruby"),
     }
     
     # ===== GO TOOLS =====
@@ -123,21 +169,29 @@ def auto_install_system_tools():
         "dnsx": "github.com/projectdiscovery/dnsx/cmd/dnsx@latest",
     }
     
-    total = len(apt_tools) + len(go_tools)
-    missing_apt = [pkg for cmd, pkg in apt_tools.items() if not shutil.which(cmd)]
+    total = len(tools) + len(go_tools)
     
-    print(f"\n🔍 Scanning {total} tools...")
+    # Get missing packages
+    pkg_idx = 0 if pkgmgr == "apt" else 1
+    missing = [(cmd, pkgs[pkg_idx]) for cmd, pkgs in tools.items() if not shutil.which(cmd)]
+    missing_pkgs = [pkg for _, pkg in missing]
     
-    # [1] APT
-    if missing_apt:
-        print(f"\n━━━ [1/2] APT: {len(missing_apt)} packages ━━━")
-        print(f"    {', '.join(missing_apt[:8])}{'...' if len(missing_apt) > 8 else ''}\n")
-        subprocess.run(["sudo", "apt-get", "update"])
-        subprocess.run(["sudo", "apt-get", "install", "-y"] + missing_apt)
+    print(f"\n🔍 Scanning {total} tools... (using {pkgmgr})")
+    
+    # [1] Install system packages
+    if missing_pkgs:
+        print(f"\n━━━ [1/2] {pkgmgr.upper()}: {len(missing_pkgs)} packages ━━━")
+        print(f"    {', '.join(missing_pkgs[:8])}{'...' if len(missing_pkgs) > 8 else ''}\n")
+        
+        if pkgmgr == "apt":
+            subprocess.run(["sudo", "apt-get", "update"])
+            subprocess.run(["sudo", "apt-get", "install", "-y"] + missing_pkgs)
+        else:  # pacman
+            subprocess.run(["sudo", "pacman", "-Sy", "--noconfirm"] + missing_pkgs)
     else:
-        print("\n━━━ [1/2] APT: All installed ✅ ━━━")
+        print(f"\n━━━ [1/2] {pkgmgr.upper()}: All installed ✅ ━━━")
     
-    # [2] GO (check again after apt)
+    # [2] GO tools
     missing_go = [cmd for cmd in go_tools.keys() if not shutil.which(cmd)]
     if missing_go:
         go_bin = shutil.which("go") or "/usr/bin/go"
@@ -156,7 +210,7 @@ def auto_install_system_tools():
         print("\n━━━ [2/2] GO: All installed ✅ ━━━")
     
     # Final count
-    installed = sum(1 for cmd in apt_tools.keys() if shutil.which(cmd))
+    installed = sum(1 for cmd in tools.keys() if shutil.which(cmd))
     installed += sum(1 for cmd in go_tools.keys() if shutil.which(cmd))
     
     print(f"\n════════════════════════════════════════")
