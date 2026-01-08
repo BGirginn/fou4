@@ -692,6 +692,7 @@ class CyberToolkit:
             console.print(f"  [2] Check System Dependencies")
             console.print(f"  [3] View Configuration")
             console.print(f"  [4] Install Missing Tools (Guide)")
+            console.print(f"  [5] [yellow]Reinstall ALL Tools[/yellow]")
             console.print(f"  [0] Back to Main Menu")
             
             choice = Prompt.ask("\nSelect option", default="0")
@@ -709,6 +710,40 @@ class CyberToolkit:
                 self._view_config()
             elif choice == "4":
                 self.install_missing_tools()
+            elif choice == "5":
+                self._reinstall_all_tools()
+    
+    def _reinstall_all_tools(self):
+        """Force reinstall all tools."""
+        console.print("\n[bold yellow]⚠️ Reinstalling ALL tools...[/bold yellow]\n")
+        
+        # Read package manager preference
+        config_file = Path(__file__).parent / "config" / "pkgmgr.txt"
+        pkgmgr = "apt"
+        if config_file.exists():
+            pkgmgr = config_file.read_text().strip()
+        
+        # Tool packages
+        tools_apt = ["nmap", "nikto", "gobuster", "sqlmap", "tcpdump", 
+                     "netcat-traditional", "hydra", "aircrack-ng", 
+                     "curl", "git", "wget", "jq"]
+        tools_pacman = ["nmap", "nikto", "gobuster", "sqlmap", "tcpdump",
+                        "openbsd-netcat", "hydra", "aircrack-ng",
+                        "curl", "git", "wget", "jq"]
+        
+        is_root = os.geteuid() == 0
+        sudo_prefix = [] if is_root else ["sudo"]
+        
+        if pkgmgr == "apt":
+            console.print("[cyan]Running: apt-get install --reinstall ...[/cyan]\n")
+            subprocess.run(sudo_prefix + ["apt-get", "update"])
+            subprocess.run(sudo_prefix + ["apt-get", "install", "--reinstall", "-y"] + tools_apt)
+        else:
+            console.print("[cyan]Running: pacman -S ...[/cyan]\n")
+            subprocess.run(sudo_prefix + ["pacman", "-S", "--noconfirm"] + tools_pacman)
+        
+        console.print("\n[green]✅ Reinstallation complete![/green]")
+        input("\nPress Enter to continue...")
     
     def _view_config(self):
         """View current configuration."""
