@@ -44,40 +44,77 @@ websockets>=12.0
 
 def auto_install_dependencies(silent: bool = False) -> bool:
     """Python bagimlilarini otomatik kur"""
-    requirements_file = ensure_requirements_file()
     
     if not silent:
-        print("📦 Installing Python dependencies...")
+        print("📦 Python bagimliliklari kuruluyor...")
     
-    try:
-        # once break-system-packages ile dene
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--upgrade", "--break-system-packages", "-r", str(requirements_file)],
-            capture_output=True,
-            text=True
-        )
+    # arch linux mi kontrol et
+    is_arch = shutil.which("pacman") is not None
+    is_root = os.geteuid() == 0
+    sudo_prefix = [] if is_root else ["sudo"]
+    
+    if is_arch:
+        # arch icin pacman kullan
+        arch_packages = [
+            "python-rich",
+            "python-yaml",
+            "python-click",
+            "python-dotenv",
+            "python-sqlalchemy",
+            "python-pydantic",
+            "python-requests",
+            "python-fastapi",
+            "python-uvicorn",
+            "python-pyjwt",
+            "python-websockets"
+        ]
         
-        if result.returncode != 0:
-            # olmazsa onsuz dene
-            result = subprocess.run(
-                [sys.executable, "-m", "pip", "install", "--upgrade", "-r", str(requirements_file)],
-                capture_output=True,
-                text=True
-            )
+        if not silent:
+            print("   Arch Linux tespit edildi, pacman kullaniliyor...")
+        
+        result = subprocess.run(
+            sudo_prefix + ["pacman", "-S", "--noconfirm", "--needed"] + arch_packages,
+            capture_output=True
+        )
         
         if result.returncode == 0:
             if not silent:
-                print("✅ Python dependencies installed!\n")
+                print("✅ Python bagimliliklari kuruldu!\n")
             return True
         else:
             if not silent:
-                print("⚠️  Some dependencies may need manual install")
-                print(f"   Try: pip install rich pyyaml click")
-            return True  # devam et
-    except Exception as e:
-        print(f"⚠️  pip install warning: {e}")
-        print("   Try manually: pip install rich pyyaml click")
-        return True  # devam et
+                print("⚠️  Bazi paketler kurulamadi, devam ediliyor...")
+            return True
+    else:
+        # diger distro'lar icin pip kullan
+        requirements_file = ensure_requirements_file()
+        
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--upgrade", "--break-system-packages", "-r", str(requirements_file)],
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode != 0:
+                result = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "--upgrade", "-r", str(requirements_file)],
+                    capture_output=True,
+                    text=True
+                )
+            
+            if result.returncode == 0:
+                if not silent:
+                    print("✅ Python bagimliliklari kuruldu!\n")
+                return True
+            else:
+                if not silent:
+                    print("⚠️  Bazi bagimliliklar manuel kurulum gerektirebilir")
+                    print(f"   Dene: pip install rich pyyaml click")
+                return True
+        except Exception as e:
+            print(f"⚠️  pip kurulum uyarisi: {e}")
+            return True
 
 
 def get_package_manager() -> str:
