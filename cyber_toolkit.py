@@ -1097,180 +1097,20 @@ nuclei -update-templates
                 input("\nPress Enter to continue...")
 
 
-def check_system_requirements() -> bool:
-    """
-    Sistem gereksinimlerini kontrol et ve eksik olanlari kur.
-    Kritik gereksinimler karsilanirsa True doner.
-    """
-    console.print("\n[bold cyan]=== amaoto sistem gereksinimleri ===[/bold cyan]\n")
-    
-    all_passed = True
-    warnings = []
-    missing_pip_packages = []
-    
-    # python versiyon kontrolu
-    py_version = sys.version_info
-    if py_version >= (3, 8):
-        console.print(f"  [green]✓[/green] Python {py_version.major}.{py_version.minor}.{py_version.micro}")
-    else:
-        console.print(f"  [red]✗[/red] Python {py_version.major}.{py_version.minor} (3.8+ required)")
-        all_passed = False
-    
-    # gerekli python paketleri - kontrol et ve kur
-    required_packages = [
-        ('rich', 'Rich TUI', 'rich'),
-        ('yaml', 'PyYAML', 'pyyaml'),
-        ('click', 'CLI', 'click'),
-        ('dotenv', 'Environment', 'python-dotenv'),
-        ('sqlalchemy', 'Database', 'sqlalchemy'),
-        ('fastapi', 'API Server', 'fastapi'),
-        ('requests', 'HTTP Client', 'requests'),
-        ('pydantic', 'Validation', 'pydantic'),
-        ('uvicorn', 'ASGI Server', 'uvicorn'),
-        ('jwt', 'JWT Auth', 'PyJWT'),
-        ('websockets', 'WebSockets', 'websockets'),
-    ]
-    
-    console.print("\n  [bold]Python Packages:[/bold]")
-    
-    for package, name, pip_name in required_packages:
-        try:
-            __import__(package)
-            console.print(f"    [green]✓[/green] {name}")
-        except ImportError:
-            console.print(f"    [yellow]○[/yellow] {name} (installing...)")
-            missing_pip_packages.append(pip_name)
-    
-    # eksik pip paketlerini kur
-    if missing_pip_packages:
-        console.print(f"\n  [cyan]Installing {len(missing_pip_packages)} missing packages...[/cyan]")
-        try:
-            subprocess.run(
-                [sys.executable, "-m", "pip", "install", "-q"] + missing_pip_packages,
-                capture_output=True,
-                check=True
-            )
-            console.print(f"  [green]✓[/green] Packages installed successfully!")
-        except subprocess.CalledProcessError as e:
-            console.print(f"  [red]✗[/red] Failed to install some packages")
-            warnings.append("Some Python packages could not be installed")
-    
-    # temel guvenlik araclari
-    core_tools = [
-        ('nmap', 'Nmap'),
-        ('curl', 'cURL'),
-        ('git', 'Git'),
-    ]
-    
-    recommended_tools = [
-        ('nuclei', 'Nuclei'),
-        ('ffuf', 'FFUF'),
-        ('subfinder', 'Subfinder'),
-        ('httpx', 'HTTPx'),
-        ('sqlmap', 'SQLMap'),
-        ('gobuster', 'Gobuster'),
-        ('nikto', 'Nikto'),
-        ('hydra', 'Hydra'),
-        ('john', 'John'),
-        ('hashcat', 'Hashcat'),
-    ]
-    
-    console.print("\n  [bold]Core Tools:[/bold]")
-    
-    for cmd, name in core_tools:
-        if shutil.which(cmd):
-            console.print(f"    [green]✓[/green] {name}")
-        else:
-            console.print(f"    [red]✗[/red] {name} (required)")
-            all_passed = False
-    
-    console.print("\n  [bold]Security Tools:[/bold]")
-    
-    installed_count = 0
-    missing_tools = []
-    for cmd, name in recommended_tools:
-        if shutil.which(cmd):
-            console.print(f"    [green]✓[/green] {name}")
-            installed_count += 1
-        else:
-            console.print(f"    [yellow]○[/yellow] {name}")
-            missing_tools.append(cmd)
-    
-    if missing_tools:
-        warnings.append(f"{len(missing_tools)} security tools not installed")
-    
-    # 4. Directory permissions
-    console.print("\n  [bold]Directories:[/bold]")
-    
-    base_dir = Path(__file__).parent
-    required_dirs = ['config', 'results', 'logs']
-    
-    for dir_name in required_dirs:
-        dir_path = base_dir / dir_name
-        try:
-            dir_path.mkdir(exist_ok=True)
-            if os.access(dir_path, os.W_OK):
-                console.print(f"    [green]✓[/green] {dir_name}/")
-            else:
-                console.print(f"    [red]✗[/red] {dir_name}/ (no write permission)")
-                all_passed = False
-        except Exception as e:
-            console.print(f"    [red]✗[/red] {dir_name}/ ({e})")
-            all_passed = False
-    
-    # Summary
-    console.print("\n" + "─" * 50)
-    
-    if all_passed:
-        console.print("\n  [bold green]✓ All critical requirements passed![/bold green]")
-    else:
-        console.print("\n  [bold red]✗ Some critical requirements failed![/bold red]")
-    
-    if warnings:
-        console.print("\n  [yellow]Warnings:[/yellow]")
-        for warning in warnings:
-            console.print(f"    [dim]• {warning}[/dim]")
-    
-    if missing_tools:
-        console.print("\n  [dim]To install missing tools:[/dim]")
-        console.print("  [dim]  Debian/Kali: sudo apt install <tool>[/dim]")
-        console.print("  [dim]  Go tools: go install github.com/...@latest[/dim]")
-    
-    console.print()
-    
-    return all_passed
-
-
 def main():
-    """Entry point."""
+    """Ana giris noktasi"""
     try:
-        # Fully automatic system check and installation
-        console.print("\n[bold cyan] amaoto - otomatik kurulum[/bold cyan]\n")
-        
-        # Check and install/update everything automatically
-        requirements_ok = check_system_requirements()
-        
-        if not requirements_ok:
-            console.print("\n[bold yellow]⚡ Installing missing components...[/bold yellow]\n")
-            
-            # Install all missing dependencies and tools
-            auto_install_dependencies(silent=False)
-            auto_install_system_tools()
-            
-            console.print("\n[bold]📋 Final system status:[/bold]")
-            check_system_requirements()
-        
-        console.print("\n[green] kurulum tamam! amaoto baslatiliyor...[/green]")
-        
         toolkit = CyberToolkit()
         toolkit.run()
     except KeyboardInterrupt:
-        console.print("\n\n[yellow]Interrupted by user. Exiting...[/yellow]")
+        console.print("\n\n[yellow]Kullanici tarafindan iptal edildi.[/yellow]")
         sys.exit(0)
     except Exception as e:
-        console.print(f"\n[red]Fatal error: {e}[/red]")
+        console.print(f"\n[red]Hata: {e}[/red]")
         sys.exit(1)
 
 
 if __name__ == "__main__":
     main()
+
+
