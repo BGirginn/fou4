@@ -573,54 +573,40 @@ class CyberToolkit:
         
         console.print(f"[dim]Example: {tool_info['example']}[/dim]\n")
         
-        # Check for preset profiles
-        if tool_name in self.profiles:
-            self._show_preset_menu(tool_name, tool_info)
-        else:
-            self._run_custom_command(tool_info)
-    
-    def _show_preset_menu(self, tool_name: str, tool_info: dict):
-        """Show preset profiles for a tool."""
-        presets = self.profiles.get(tool_name, {})
+        # Show options
+        console.print("[bold]Select mode:[/bold]")
+        console.print("  [1] Quick scan (target only)")
+        console.print("  [2] Custom flags + target")
+        console.print("  [3] Full custom command (write everything)")
+        console.print("  [0] Back")
         
-        console.print("[bold]Available Presets:[/bold]")
-        preset_list = list(presets.items())
-        
-        for idx, (preset_key, preset) in enumerate(preset_list, 1):
-            console.print(f"  [{idx}] {preset['name']} - {preset['description']}")
-        
-        console.print(f"  [c] Custom command")
-        console.print(f"  [0] Back")
-        
-        choice = Prompt.ask("\nSelect preset or custom", default="c")
+        choice = Prompt.ask("\nMode", default="1")
         
         if choice == "0":
             return
-        elif choice == "c":
-            self._run_custom_command(tool_info)
-        elif choice.isdigit() and 1 <= int(choice) <= len(preset_list):
-            preset_key, preset = preset_list[int(choice) - 1]
+        elif choice == "1":
+            # Quick scan - just target
             target = Prompt.ask("Enter target")
             if target:
-                cmd = f"{tool_info['cmd']} {preset['flags']} {target}"
-                self._execute_command(cmd, tool_info["name"])
-    
-    def _run_custom_command(self, tool_info: dict):
-        """Run tool with custom command."""
-        # Get target if not set
-        if not self.current_target:
-            target = Prompt.ask("Enter target (IP/domain)")
+                cmd = f"{tool_info['cmd']} {target}"
+                if Confirm.ask(f"Execute: [cyan]{cmd}[/cyan]?"):
+                    self._execute_command(cmd, tool_info["name"])
+        elif choice == "2":
+            # Custom flags + target
+            target = Prompt.ask("Enter target")
             if target:
-                self.current_target = target
-        
-        # Get custom flags
-        flags = Prompt.ask(f"Enter flags for {tool_info['name']}", default="")
-        
-        if self.current_target:
-            cmd = f"{tool_info['cmd']} {flags} {self.current_target}".strip()
-            
-            if Confirm.ask(f"Execute: [cyan]{cmd}[/cyan]?"):
-                self._execute_command(cmd, tool_info["name"])
+                flags = Prompt.ask("Enter flags", default="-sV -T4" if tool_info['cmd'] == 'nmap' else "")
+                cmd = f"{tool_info['cmd']} {flags} {target}".strip()
+                if Confirm.ask(f"Execute: [cyan]{cmd}[/cyan]?"):
+                    self._execute_command(cmd, tool_info["name"])
+        elif choice == "3":
+            # Full custom command
+            console.print(f"\n[dim]Tool: {tool_info['cmd']}[/dim]")
+            console.print(f"[dim]Example: {tool_info['example']}[/dim]\n")
+            cmd = Prompt.ask("Enter full command")
+            if cmd:
+                if Confirm.ask(f"Execute: [cyan]{cmd}[/cyan]?"):
+                    self._execute_command(cmd, tool_info["name"])
     
     def _execute_command(self, cmd: str, tool_name: str):
         """Execute command and save results."""
