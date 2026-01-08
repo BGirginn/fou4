@@ -1,21 +1,21 @@
-# AMAOTO - Penetration Testing Toolkit
+# amaoto - penetration testing toolkit
 
-> Unified terminal interface for security assessment tools. Supports Debian/Ubuntu, Raspberry Pi, and Arch Linux.
+> terminal tabanli guvenlik degerlendirme araci. debian/ubuntu, raspberry pi ve arch linux destekler.
 
 [![Version](https://img.shields.io/badge/version-2.1.1-blue.svg)](#)
 [![Python](https://img.shields.io/badge/python-3.10+-green.svg)](#)
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg)](#license)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20ARM-orange.svg)](#)
 
-## Features
+## ozellikler
 
-- Auto-Install: Eksik araclari otomatik tespit edip kurar
-- Progress Tracking: Kurulum sirasinda gorsel ilerleme cubugu
-- Multi-Platform: apt (Debian/Pi) ve pacman (Arch) destegi
-- Custom Commands: Istedigin shell komutunu dogrudan calistir
-- Result Saving: Tarama ciktilarini zaman damgasiyla kaydet
+- otomatik kurulum: eksik araclari tespit edip kurar
+- ilerleme takibi: kurulum sirasinda gorsel ilerleme cubugu
+- coklu platform: apt (debian/pi) ve pacman (arch) destegi
+- ozel komutlar: istedigin shell komutunu dogrudan calistir
+- sonuc kaydetme: tarama ciktilarini zaman damgasiyla kaydet
 
-## Kurulum
+## kurulum
 
 ```bash
 git clone https://github.com/BGirginn/amaoto.git
@@ -23,29 +23,29 @@ cd amaoto
 python3 cyber_toolkit.py
 ```
 
-Ilk calistirmada:
-1. Paket yoneticisi sorar (apt/pacman)
-2. Python bagimliklarini kurar
-3. Eksik guvenlik araclarini kurar
-4. Toolkit'i baslatir
+ilk calistirmada:
+1. paket yoneticisi sorar (apt/pacman)
+2. python bagimliklarini kurar
+3. eksik guvenlik araclarini kurar
+4. toolkit'i baslatir
 
-## Araclar (26)
+## araclar (26)
 
-| Kategori | Araclar |
+| kategori | araclar |
 |----------|---------|
-| Kesif | nmap, masscan, subfinder, httpx, dnsx |
-| Web | nikto, gobuster, sqlmap, nuclei, ffuf |
-| Ag | wireshark, tshark, tcpdump, netcat |
-| Sifre | hydra, john, hashcat, medusa |
-| Kablosuz | aircrack-ng, reaver, wifite |
-| Yardimci | curl, git, wget, jq |
+| kesif | nmap, masscan, subfinder, httpx, dnsx |
+| web | nikto, gobuster, sqlmap, nuclei, ffuf |
+| ag | wireshark, tshark, tcpdump, netcat |
+| sifre | hydra, john, hashcat, medusa |
+| kablosuz | aircrack-ng, reaver, wifite |
+| yardimci | curl, git, wget, jq |
 
-## Gereksinimler
+## gereksinimler
 
-- Python 3.10+
-- Linux (Debian, Ubuntu, Raspberry Pi OS, Arch)
-- Root/sudo erisimi (arac kurulumu icin)
+- python 3.10+
+- linux (debian, ubuntu, raspberry pi os, arch)
+- root/sudo erisimi (arac kurulumu icin)
 
-## Lisans
+## lisans
 
 MIT - [BGirginn](https://bgirgin.dev)

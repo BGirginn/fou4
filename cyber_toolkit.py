@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AMAOTO - Guvenlik Test Araci
+amaoto - guvenlik test araci
 Terminal tabanli pentest ve guvenlik degerlendirme toolkit'i
 """
 
@@ -263,7 +263,7 @@ def auto_install_system_tools():
 
 
 # baslangicta bagimliliklari kontrol et
-print("\n AMAOTO - Baslangic Kontrolu\n")
+print("\n amaoto - baslangic kontrolu\n")
 auto_install_dependencies(silent=False)
 auto_install_system_tools()
 
@@ -572,12 +572,12 @@ class CyberToolkit:
     def show_banner(self):
         """Uygulama banner'ini goster"""
         banner_text = """
-[bold cyan]███████╗ ██████╗ ██╗   ██╗██╗  ██╗[/bold cyan]
-[bold cyan]██╔════╝██╔═══██╗██║   ██║██║  ██║[/bold cyan]
-[bold cyan]█████╗  ██║   ██║██║   ██║███████║[/bold cyan]
-[bold cyan]██╔══╝  ██║   ██║██║   ██║╚════██║[/bold cyan]
-[bold cyan]██║     ╚██████╔╝╚██████╔╝     ██║[/bold cyan]
-[bold cyan]╚═╝      ╚═════╝  ╚═════╝      ╚═╝[/bold cyan]"""
+[bold cyan] █████╗ ███╗   ███╗ █████╗  ██████╗ ████████╗ ██████╗ [/bold cyan]
+[bold cyan]██╔══██╗████╗ ████║██╔══██╗██╔═══██╗╚══██╔══╝██╔═══██╗[/bold cyan]
+[bold cyan]███████║██╔████╔██║███████║██║   ██║   ██║   ██║   ██║[/bold cyan]
+[bold cyan]██╔══██║██║╚██╔╝██║██╔══██║██║   ██║   ██║   ██║   ██║[/bold cyan]
+[bold cyan]██║  ██║██║ ╚═╝ ██║██║  ██║╚██████╔╝   ██║   ╚██████╔╝[/bold cyan]
+[bold cyan]╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝ [/bold cyan]"""
         
         console.print(banner_text)
         
@@ -957,7 +957,7 @@ nuclei -update-templates
                 choice = Prompt.ask("\n[bold cyan]Select option[/bold cyan]", default="0")
                 
                 if choice == "0":
-                    console.print("\n[green]AMAOTO kullandigin icin tesekkurler![/green]")
+                    console.print("\n[green]amaoto kullandigin icin tesekkurler![/green]")
                     break
                 
                 elif choice == "7":
@@ -1016,7 +1016,7 @@ def check_system_requirements() -> bool:
     Sistem gereksinimlerini kontrol et ve eksik olanlari kur.
     Kritik gereksinimler karsilanirsa True doner.
     """
-    console.print("\n[bold cyan]=== AMAOTO Sistem Gereksinimleri ===[/bold cyan]\n")
+    console.print("\n[bold cyan]=== amaoto sistem gereksinimleri ===[/bold cyan]\n")
     
     all_passed = True
     warnings = []
@@ -1159,7 +1159,7 @@ def main():
     """Entry point."""
     try:
         # Fully automatic system check and installation
-        console.print("\n[bold cyan] AMAOTO - Otomatik Kurulum[/bold cyan]\n")
+        console.print("\n[bold cyan] amaoto - otomatik kurulum[/bold cyan]\n")
         
         # Check and install/update everything automatically
         requirements_ok = check_system_requirements()
@@ -1174,7 +1174,7 @@ def main():
             console.print("\n[bold]📋 Final system status:[/bold]")
             check_system_requirements()
         
-        console.print("\n[green] Kurulum tamam! AMAOTO baslatiliyor...[/green]")
+        console.print("\n[green] kurulum tamam! amaoto baslatiliyor...[/green]")
         
         toolkit = CyberToolkit()
         toolkit.run()
