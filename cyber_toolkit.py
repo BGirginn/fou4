@@ -183,11 +183,15 @@ def auto_install_system_tools():
         print(f"\n━━━ [1/2] {pkgmgr.upper()}: {len(missing_pkgs)} packages ━━━")
         print(f"    {', '.join(missing_pkgs[:8])}{'...' if len(missing_pkgs) > 8 else ''}\n")
         
+        # Check if running as root or if sudo is available
+        is_root = os.geteuid() == 0
+        sudo_prefix = [] if is_root else ["sudo"]
+        
         if pkgmgr == "apt":
-            subprocess.run(["sudo", "apt-get", "update"])
-            subprocess.run(["sudo", "apt-get", "install", "-y"] + missing_pkgs)
+            subprocess.run(sudo_prefix + ["apt-get", "update"])
+            subprocess.run(sudo_prefix + ["apt-get", "install", "-y"] + missing_pkgs)
         else:  # pacman
-            subprocess.run(["sudo", "pacman", "-Sy", "--noconfirm"] + missing_pkgs)
+            subprocess.run(sudo_prefix + ["pacman", "-Sy", "--noconfirm"] + missing_pkgs)
     else:
         print(f"\n━━━ [1/2] {pkgmgr.upper()}: All installed ✅ ━━━")
     
