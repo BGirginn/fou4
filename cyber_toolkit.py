@@ -130,48 +130,29 @@ def auto_install_system_tools():
     
     pkgmgr = get_package_manager()
     
-    # ===== TOOL DEFINITIONS (cmd -> apt_pkg, pacman_pkg) =====
-    # Note: Some tools are AUR-only on Arch, marked with None
+    # ===== LIGHTWEIGHT CLI TOOLS ONLY =====
     tools = {
         # Recon
         "nmap": ("nmap", "nmap"),
-        "masscan": ("masscan", "masscan"),
         # Web
         "nikto": ("nikto", "nikto"),
         "gobuster": ("gobuster", "gobuster"),
         "sqlmap": ("sqlmap", "sqlmap"),
         # Network
-        "wireshark": ("wireshark", "wireshark-qt"),
-        "tshark": ("tshark", "wireshark-cli"),
         "tcpdump": ("tcpdump", "tcpdump"),
         "nc": ("netcat-traditional", "openbsd-netcat"),
         # Password
         "hydra": ("hydra", "hydra"),
-        "john": ("john", "john"),
-        "hashcat": ("hashcat", "hashcat"),
         # Wireless
         "aircrack-ng": ("aircrack-ng", "aircrack-ng"),
-        "reaver": ("reaver", "reaver"),
         # Utils
         "curl": ("curl", "curl"),
         "git": ("git", "git"),
         "wget": ("wget", "wget"),
         "jq": ("jq", "jq"),
-        # Languages
-        "go": ("golang-go", "go"),
-        "gem": ("ruby-full", "ruby"),
     }
     
-    # ===== GO TOOLS =====
-    go_tools = {
-        "subfinder": "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
-        "httpx": "github.com/projectdiscovery/httpx/cmd/httpx@latest",
-        "nuclei": "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest",
-        "ffuf": "github.com/ffuf/ffuf/v2@latest",
-        "dnsx": "github.com/projectdiscovery/dnsx/cmd/dnsx@latest",
-    }
-    
-    total = len(tools) + len(go_tools)
+    total = len(tools)
     
     # Get missing packages
     pkg_idx = 0 if pkgmgr == "apt" else 1
@@ -182,10 +163,10 @@ def auto_install_system_tools():
     
     # [1] Install system packages
     if missing_pkgs:
-        print(f"\n━━━ [1/2] {pkgmgr.upper()}: {len(missing_pkgs)} packages ━━━")
-        print(f"    {', '.join(missing_pkgs[:8])}{'...' if len(missing_pkgs) > 8 else ''}\n")
+        print(f"\n━━━ Installing {len(missing_pkgs)} packages ━━━")
+        print(f"    {', '.join(missing_pkgs)}\n")
         
-        # Check if running as root or if sudo is available
+        # Check if running as root
         is_root = os.geteuid() == 0
         sudo_prefix = [] if is_root else ["sudo"]
         
@@ -195,32 +176,13 @@ def auto_install_system_tools():
         else:  # pacman
             subprocess.run(sudo_prefix + ["pacman", "-Sy", "--noconfirm"] + missing_pkgs)
     else:
-        print(f"\n━━━ [1/2] {pkgmgr.upper()}: All installed ✅ ━━━")
-    
-    # [2] GO tools
-    missing_go = [cmd for cmd in go_tools.keys() if not shutil.which(cmd)]
-    if missing_go:
-        go_bin = shutil.which("go") or "/usr/bin/go"
-        if os.path.exists(go_bin):
-            print(f"\n━━━ [2/2] GO: {len(missing_go)} tools ━━━")
-            go_path = os.path.expanduser("~/go")
-            os.makedirs(f"{go_path}/bin", exist_ok=True)
-            os.environ["GOPATH"] = go_path
-            os.environ["PATH"] = f"{go_path}/bin:/usr/local/go/bin:{os.environ.get('PATH', '')}"
-            for tool in missing_go:
-                print(f"    Installing {tool}...")
-                subprocess.run([go_bin, "install", go_tools[tool]], env=os.environ)
-        else:
-            print("\n━━━ [2/2] GO: Go not found ━━━")
-    else:
-        print("\n━━━ [2/2] GO: All installed ✅ ━━━")
+        print("\n━━━ All tools installed ✅ ━━━")
     
     # Final count
     installed = sum(1 for cmd in tools.keys() if shutil.which(cmd))
-    installed += sum(1 for cmd in go_tools.keys() if shutil.which(cmd))
     
     print(f"\n════════════════════════════════════════")
-    print(f"✅ Complete! {installed}/{total} tools installed")
+    print(f"✅ Complete! {installed}/{total} tools ready")
     print(f"════════════════════════════════════════\n")
 
 
