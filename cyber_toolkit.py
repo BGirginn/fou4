@@ -288,7 +288,7 @@ except ImportError:
 console = Console()
 
 # Version info
-VERSION = "5.0.0"
+VERSION = "2.1.1"
 CODENAME = "Enterprise"
 
 
