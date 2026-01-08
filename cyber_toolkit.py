@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-amaoto - guvenlik test araci
-Terminal tabanli pentest ve guvenlik degerlendirme toolkit'i
+amaoto
 """
 
 import os
@@ -571,14 +570,48 @@ class CyberToolkit:
     
     def show_banner(self):
         """Uygulama banner'ini goster"""
-        banner_text = """
-[bold cyan] █████╗ ███╗   ███╗ █████╗  ██████╗ ████████╗ ██████╗ [/bold cyan]
-[bold cyan]██╔══██╗████╗ ████║██╔══██╗██╔═══██╗╚══██╔══╝██╔═══██╗[/bold cyan]
-[bold cyan]███████║██╔████╔██║███████║██║   ██║   ██║   ██║   ██║[/bold cyan]
-[bold cyan]██╔══██║██║╚██╔╝██║██╔══██║██║   ██║   ██║   ██║   ██║[/bold cyan]
-[bold cyan]██║  ██║██║ ╚═╝ ██║██║  ██║╚██████╔╝   ██║   ╚██████╔╝[/bold cyan]
-[bold cyan]╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝ [/bold cyan]"""
+        import random
         
+        banners = [
+            # banner 1 - slant
+            """[bold cyan]
+   ____ _____ ___   ____ _____  ____  
+  / _  |     /   | / __ \\     |/ __ \\ 
+ / /_| | | | | o || |  | | | || /  \\_|
+|  _  | | | |  _  | |  | | | || |  __ 
+| | | | | | | | | | |__| | | || \\__/ |
+|_| |_|_|_|_|_| |_|\\____/|_|_| \\____/ [/bold cyan]""",
+            
+            # banner 2 - simple
+            """[bold cyan]
+  __ _ _ __ ___   __ _  ___ | |_ ___  
+ / _` | '_ ` _ \\ / _` |/ _ \\| __/ _ \\ 
+| (_| | | | | | | (_| | (_) | || (_) |
+ \\__,_|_| |_| |_|\\__,_|\\___/ \\__\\___/ [/bold cyan]""",
+            
+            # banner 3 - lines
+            """[bold cyan]
+╔═╗╔╦╗╔═╗╔═╗╔╦╗╔═╗
+╠═╣║║║╠═╣║ ║ ║ ║ ║
+╩ ╩╩ ╩╩ ╩╚═╝ ╩ ╚═╝[/bold cyan]""",
+            
+            # banner 4 - dots
+            """[bold cyan]
+       o                     o          
+       O                     O          
+       o  o-O-o o-o  o-o o-O-o o-o       
+      /|  | | | |  | | |  |   | |       
+     o o  o o o o-o  o-o  o   o-o [/bold cyan]""",
+            
+            # banner 5 - minimal
+            """[bold cyan]
+ ___ _____ ___ ___ _____ ___
+| . |     | . | . |_   _| . |
+|   | | | |   | | | | | | | |
+|_|_|_|_|_|_|_|___| |_| |___| [/bold cyan]"""
+        ]
+        
+        banner_text = random.choice(banners)
         console.print(banner_text)
         
         # durum cubugu
