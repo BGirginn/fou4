@@ -48,30 +48,36 @@ def auto_install_dependencies(silent: bool = False) -> bool:
     requirements_file = ensure_requirements_file()
     
     if not silent:
-        print("📦 Checking and installing dependencies...")
+        print("📦 Installing Python dependencies...")
     
     try:
-        # Install/upgrade all requirements
+        # Try with --break-system-packages first (for externally managed environments)
         result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-q", "--upgrade", "--break-system-packages", "-r", str(requirements_file)],
+            [sys.executable, "-m", "pip", "install", "--upgrade", "--break-system-packages", "-r", str(requirements_file)],
             capture_output=True,
             text=True
         )
+        
+        if result.returncode != 0:
+            # Try without --break-system-packages
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--upgrade", "-r", str(requirements_file)],
+                capture_output=True,
+                text=True
+            )
+        
         if result.returncode == 0:
             if not silent:
-                print("✅ Dependencies verified!\n")
+                print("✅ Python dependencies installed!\n")
             return True
         else:
             if not silent:
                 print("⚠️  Some dependencies may need manual install")
-                print(f"   Run: pip3 install -r requirements.txt")
+                print(f"   Try: pip install rich pyyaml click")
             return True  # Continue anyway
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Failed to install dependencies: {e}")
-        print("   Try manually: pip3 install -r requirements.txt")
-        return False
     except Exception as e:
-        print(f"⚠️  Dependency check warning: {e}")
+        print(f"⚠️  pip install warning: {e}")
+        print("   Try manually: pip install rich pyyaml click")
         return True  # Continue anyway
 
 
