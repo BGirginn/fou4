@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-FOU4 v5.0 - Unified Security Testing Interface
-A terminal-based toolkit for penetration testing and security assessment.
+FOU4 - Guvenlik Test Araci
+Terminal tabanli pentest ve guvenlik degerlendirme toolkit'i
 """
 
 import os
@@ -13,14 +13,14 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 
-# Add Go and pip bin directories to PATH for tool detection
+# Go ve pip dizinlerini PATH'e ekle
 go_bin = os.path.expanduser("~/go/bin")
 local_bin = os.path.expanduser("~/.local/bin")
 os.environ["PATH"] = f"{go_bin}:{local_bin}:{os.environ.get('PATH', '')}"
 
 
 def ensure_requirements_file() -> Path:
-    """Ensure requirements.txt exists with all dependencies."""
+    """requirements.txt dosyasini olustur veya kontrol et"""
     requirements_file = Path(__file__).parent / "requirements.txt"
     
     required_content = """rich>=13.0.0
@@ -44,14 +44,14 @@ websockets>=12.0
 
 
 def auto_install_dependencies(silent: bool = False) -> bool:
-    """Automatically install/update all dependencies from requirements.txt."""
+    """Python bagimlilarini otomatik kur"""
     requirements_file = ensure_requirements_file()
     
     if not silent:
         print("📦 Installing Python dependencies...")
     
     try:
-        # Try with --break-system-packages first (for externally managed environments)
+        # once break-system-packages ile dene
         result = subprocess.run(
             [sys.executable, "-m", "pip", "install", "--upgrade", "--break-system-packages", "-r", str(requirements_file)],
             capture_output=True,
@@ -59,7 +59,7 @@ def auto_install_dependencies(silent: bool = False) -> bool:
         )
         
         if result.returncode != 0:
-            # Try without --break-system-packages
+            # olmazsa onsuz dene
             result = subprocess.run(
                 [sys.executable, "-m", "pip", "install", "--upgrade", "-r", str(requirements_file)],
                 capture_output=True,
@@ -74,25 +74,25 @@ def auto_install_dependencies(silent: bool = False) -> bool:
             if not silent:
                 print("⚠️  Some dependencies may need manual install")
                 print(f"   Try: pip install rich pyyaml click")
-            return True  # Continue anyway
+            return True  # devam et
     except Exception as e:
         print(f"⚠️  pip install warning: {e}")
         print("   Try manually: pip install rich pyyaml click")
-        return True  # Continue anyway
+        return True  # devam et
 
 
 def get_package_manager() -> str:
-    """Detect or ask for package manager."""
+    """Paket yoneticisini tespit et veya sor"""
     config_file = Path(__file__).parent / "config" / "pkgmgr.txt"
     config_file.parent.mkdir(exist_ok=True)
     
-    # Check if already saved
+    # daha once kaydedilmis mi kontrol et
     if config_file.exists():
         saved = config_file.read_text().strip()
         if saved in ["apt", "pacman"]:
             return saved
     
-    # Auto-detect
+    # otomatik tespit
     if shutil.which("apt-get"):
         detected = "apt"
     elif shutil.which("pacman"):
@@ -100,7 +100,7 @@ def get_package_manager() -> str:
     else:
         detected = None
     
-    # Ask user
+    # kullaniciya sor
     print("\n╭─────────────────────────────────────╮")
     print("│  📦 Package Manager Selection       │")
     print("╰─────────────────────────────────────╯\n")
@@ -118,7 +118,7 @@ def get_package_manager() -> str:
     else:
         pkgmgr = "apt"
     
-    # Save choice
+    # secimi kaydet
     config_file.write_text(pkgmgr)
     print(f"\n  ✅ Saved: {pkgmgr}\n")
     
@@ -126,43 +126,43 @@ def get_package_manager() -> str:
 
 
 def auto_install_system_tools():
-    """Automatically detect and install ALL missing system tools in one run."""
+    """Eksik sistem araclarini tespit edip kur"""
     
     pkgmgr = get_package_manager()
     
-    # ===== ALL TOOLS (cmd -> apt_pkg, pacman_pkg) =====
+    # tum araclar (komut -> apt paketi, pacman paketi)
     tools = {
-        # Recon
+        # keşif
         "nmap": ("nmap", "nmap"),
         "masscan": ("masscan", "masscan"),
-        # Web
+        # web
         "nikto": ("nikto", "nikto"),
         "gobuster": ("gobuster", "gobuster"),
         "sqlmap": ("sqlmap", "sqlmap"),
-        # Network
+        # ag
         "wireshark": ("wireshark", "wireshark-qt"),
         "tshark": ("tshark", "wireshark-cli"),
         "tcpdump": ("tcpdump", "tcpdump"),
         "nc": ("netcat-traditional", "openbsd-netcat"),
-        # Password
+        # sifre
         "hydra": ("hydra", "hydra"),
         "john": ("john", "john"),
         "hashcat": ("hashcat", "hashcat"),
         "medusa": ("medusa", "medusa"),
-        # Wireless
+        # kablosuz
         "aircrack-ng": ("aircrack-ng", "aircrack-ng"),
         "reaver": ("reaver", "reaver"),
         "wifite": ("wifite", "wifite"),
-        # Utils
+        # yardimci
         "curl": ("curl", "curl"),
         "git": ("git", "git"),
         "wget": ("wget", "wget"),
         "jq": ("jq", "jq"),
-        # Languages for Go/Gem tools
+        # go araclari icin
         "go": ("golang-go", "go"),
     }
     
-    # Go tools
+    # go ile kurulan araclar
     go_tools = {
         "subfinder": "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
         "httpx": "github.com/projectdiscovery/httpx/cmd/httpx@latest",
@@ -173,12 +173,12 @@ def auto_install_system_tools():
     
     total = len(tools) + len(go_tools)
     
-    # Get missing packages
+    # eksik paketleri bul
     pkg_idx = 0 if pkgmgr == "apt" else 1
     missing = [(cmd, pkgs[pkg_idx]) for cmd, pkgs in tools.items() if not shutil.which(cmd)]
     missing_pkgs = [(cmd, pkg) for cmd, pkg in missing]
     
-    # Get missing Go tools
+    # eksik go araclarini bul
     missing_go = [(cmd, url) for cmd, url in go_tools.items() if not shutil.which(cmd)]
     
     all_missing = len(missing_pkgs) + len(missing_go)
@@ -190,11 +190,11 @@ def auto_install_system_tools():
         print("━━━ All tools installed ✅ ━━━")
         return
     
-    # Check if running as root
+    # root mu kontrol et
     is_root = os.geteuid() == 0
     sudo_prefix = [] if is_root else ["sudo"]
     
-    # Update package manager first
+    # once paket veritabanini guncelle
     if missing_pkgs:
         print("📥 Updating package database...")
         if pkgmgr == "apt":
@@ -205,7 +205,7 @@ def auto_install_system_tools():
     
     current = 0
     
-    # Progress bar function
+    # ilerleme cubugu fonksiyonu
     def show_progress(current, total, name, status=""):
         bar_len = 30
         filled = int(bar_len * current / total) if total > 0 else 0
@@ -213,7 +213,7 @@ def auto_install_system_tools():
         pct = int(100 * current / total) if total > 0 else 0
         print(f"\r   [{bar}] {pct:3d}% ({current}/{total}) {name[:20]:<20} {status}", end="", flush=True)
     
-    # [1] Install system packages
+    # sistem paketlerini kur
     if missing_pkgs:
         print(f"━━━ [1/2] System Packages ({len(missing_pkgs)}) ━━━\n")
         
@@ -230,7 +230,7 @@ def auto_install_system_tools():
             show_progress(current, all_missing, pkg, status)
             print()  # newline
     
-    # [2] Go tools
+    # go araclarini kur
     if missing_go:
         print(f"\n━━━ [2/2] Go Tools ({len(missing_go)}) ━━━\n")
         
@@ -253,7 +253,7 @@ def auto_install_system_tools():
         else:
             print("   Go compiler not found - skipping Go tools")
     
-    # Final count
+    # toplam kurulu sayi
     installed = sum(1 for cmd in tools.keys() if shutil.which(cmd))
     installed += sum(1 for cmd in go_tools.keys() if shutil.which(cmd))
     
@@ -262,12 +262,12 @@ def auto_install_system_tools():
     print(f"════════════════════════════════════════\n")
 
 
-# Run dependency check on every startup
+# baslangicta bagimliliklari kontrol et
 print("\n🔧 FOU4 - Startup Check\n")
 auto_install_dependencies(silent=False)
 auto_install_system_tools()
 
-# Try importing Rich
+# rich kutuphanesini ice aktar
 try:
     from rich.console import Console
     from rich.table import Table
@@ -284,16 +284,16 @@ except ImportError:
     print("   Then restart the application.")
     sys.exit(1)
 
-# Initialize Rich console
+# konsol baslat
 console = Console()
 
-# Version info
+# versiyon bilgisi
 VERSION = "2.1.1"
 CODENAME = "Enterprise"
 
 
 class CyberToolkit:
-    """Main CyberToolkit application class."""
+    """Ana toolkit sinifi"""
     
     def __init__(self):
         self.base_dir = Path(__file__).parent
