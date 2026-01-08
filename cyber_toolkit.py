@@ -125,6 +125,7 @@ def auto_install_system_tools():
     pkgmgr = get_package_manager()
     
     # ===== TOOL DEFINITIONS (cmd -> apt_pkg, pacman_pkg) =====
+    # Note: Some tools are AUR-only on Arch, marked with None
     tools = {
         # Recon
         "nmap": ("nmap", "nmap"),
@@ -133,23 +134,18 @@ def auto_install_system_tools():
         "nikto": ("nikto", "nikto"),
         "gobuster": ("gobuster", "gobuster"),
         "sqlmap": ("sqlmap", "sqlmap"),
-        "dirb": ("dirb", "dirb"),
         # Network
         "wireshark": ("wireshark", "wireshark-qt"),
         "tshark": ("tshark", "wireshark-cli"),
         "tcpdump": ("tcpdump", "tcpdump"),
-        "nc": ("netcat-traditional", "gnu-netcat"),
+        "nc": ("netcat-traditional", "openbsd-netcat"),
         # Password
         "hydra": ("hydra", "hydra"),
         "john": ("john", "john"),
         "hashcat": ("hashcat", "hashcat"),
-        "medusa": ("medusa", "medusa"),
-        "crunch": ("crunch", "crunch"),
-        "cewl": ("cewl", "cewl"),
         # Wireless
         "aircrack-ng": ("aircrack-ng", "aircrack-ng"),
         "reaver": ("reaver", "reaver"),
-        "wifite": ("wifite", "wifite"),
         # Utils
         "curl": ("curl", "curl"),
         "git": ("git", "git"),
