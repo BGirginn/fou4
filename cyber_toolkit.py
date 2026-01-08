@@ -176,44 +176,82 @@ def auto_install_system_tools():
     # Get missing packages
     pkg_idx = 0 if pkgmgr == "apt" else 1
     missing = [(cmd, pkgs[pkg_idx]) for cmd, pkgs in tools.items() if not shutil.which(cmd)]
-    missing_pkgs = [pkg for _, pkg in missing]
+    missing_pkgs = [(cmd, pkg) for cmd, pkg in missing]
+    
+    # Get missing Go tools
+    missing_go = [(cmd, url) for cmd, url in go_tools.items() if not shutil.which(cmd)]
+    
+    all_missing = len(missing_pkgs) + len(missing_go)
     
     print(f"\n🔍 Scanning {total} tools... (using {pkgmgr})")
+    print(f"   Missing: {all_missing} tools\n")
+    
+    if all_missing == 0:
+        print("━━━ All tools installed ✅ ━━━")
+        return
     
     # Check if running as root
     is_root = os.geteuid() == 0
     sudo_prefix = [] if is_root else ["sudo"]
     
+    # Update package manager first
+    if missing_pkgs:
+        print("📥 Updating package database...")
+        if pkgmgr == "apt":
+            subprocess.run(sudo_prefix + ["apt-get", "update", "-qq"], capture_output=True)
+        else:
+            subprocess.run(sudo_prefix + ["pacman", "-Sy"], capture_output=True)
+        print("   Done!\n")
+    
+    current = 0
+    
+    # Progress bar function
+    def show_progress(current, total, name, status=""):
+        bar_len = 30
+        filled = int(bar_len * current / total) if total > 0 else 0
+        bar = "█" * filled + "░" * (bar_len - filled)
+        pct = int(100 * current / total) if total > 0 else 0
+        print(f"\r   [{bar}] {pct:3d}% ({current}/{total}) {name[:20]:<20} {status}", end="", flush=True)
+    
     # [1] Install system packages
     if missing_pkgs:
-        print(f"\n━━━ [1/2] Installing {len(missing_pkgs)} packages ━━━")
-        print(f"    {', '.join(missing_pkgs[:10])}{'...' if len(missing_pkgs) > 10 else ''}\n")
+        print(f"━━━ [1/2] System Packages ({len(missing_pkgs)}) ━━━\n")
         
-        if pkgmgr == "apt":
-            subprocess.run(sudo_prefix + ["apt-get", "update"])
-            subprocess.run(sudo_prefix + ["apt-get", "install", "-y"] + missing_pkgs)
-        else:  # pacman
-            subprocess.run(sudo_prefix + ["pacman", "-Sy", "--noconfirm"] + missing_pkgs)
-    else:
-        print("\n━━━ [1/2] System packages: All installed ✅ ━━━")
+        for cmd, pkg in missing_pkgs:
+            current += 1
+            show_progress(current, all_missing, pkg)
+            
+            if pkgmgr == "apt":
+                result = subprocess.run(sudo_prefix + ["apt-get", "install", "-y", "-qq", pkg], capture_output=True)
+            else:
+                result = subprocess.run(sudo_prefix + ["pacman", "-S", "--noconfirm", "--needed", pkg], capture_output=True)
+            
+            status = "✅" if result.returncode == 0 else "❌"
+            show_progress(current, all_missing, pkg, status)
+            print()  # newline
     
     # [2] Go tools
-    missing_go = [cmd for cmd in go_tools.keys() if not shutil.which(cmd)]
     if missing_go:
+        print(f"\n━━━ [2/2] Go Tools ({len(missing_go)}) ━━━\n")
+        
         go_bin = shutil.which("go") or "/usr/bin/go"
         if os.path.exists(go_bin):
-            print(f"\n━━━ [2/2] Installing {len(missing_go)} Go tools ━━━")
             go_path = os.path.expanduser("~/go")
             os.makedirs(f"{go_path}/bin", exist_ok=True)
             os.environ["GOPATH"] = go_path
             os.environ["PATH"] = f"{go_path}/bin:/usr/local/go/bin:{os.environ.get('PATH', '')}"
-            for tool in missing_go:
-                print(f"    Installing {tool}...")
-                subprocess.run([go_bin, "install", go_tools[tool]], env=os.environ)
+            
+            for cmd, url in missing_go:
+                current += 1
+                show_progress(current, all_missing, cmd)
+                
+                result = subprocess.run([go_bin, "install", url], env=os.environ, capture_output=True)
+                
+                status = "✅" if result.returncode == 0 else "❌"
+                show_progress(current, all_missing, cmd, status)
+                print()  # newline
         else:
-            print("\n━━━ [2/2] Go tools: Go compiler not found ━━━")
-    else:
-        print("\n━━━ [2/2] Go tools: All installed ✅ ━━━")
+            print("   Go compiler not found - skipping Go tools")
     
     # Final count
     installed = sum(1 for cmd in tools.keys() if shutil.which(cmd))
