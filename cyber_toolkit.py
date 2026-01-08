@@ -528,6 +528,7 @@ class CyberToolkit:
         # Create menu panel
         menu_content = "\n".join(menu_rows)
         menu_content += "\n\n[dim]─────────────────────────────────────────[/dim]"
+        menu_content += "\n  [bold magenta]7[/bold magenta]  💻 Custom Command"
         menu_content += "\n  [bold cyan]8[/bold cyan]  ⚙️  Settings & Configuration"
         menu_content += "\n  [bold cyan]9[/bold cyan]  📊 View Results"
         menu_content += "\n  [bold cyan]0[/bold cyan]  🚪 Exit"
@@ -825,6 +826,15 @@ nuclei -update-templates
                 if choice == "0":
                     console.print("\n[green]Thanks for using FOU4! Stay ethical![/green]")
                     break
+                
+                elif choice == "7":
+                    # Custom Command
+                    console.print("\n[bold magenta]═══ Custom Command ═══[/bold magenta]\n")
+                    console.print("[dim]Type any shell command to execute[/dim]\n")
+                    cmd = Prompt.ask("Command")
+                    if cmd:
+                        if Confirm.ask(f"Execute: [cyan]{cmd}[/cyan]?"):
+                            self._execute_command(cmd, "Custom")
                 
                 elif choice == "8":
                     self.show_settings()
