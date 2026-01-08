@@ -301,14 +301,14 @@ class CyberToolkit:
         self.config_dir = self.base_dir / "config"
         self.current_target = ""
         
-        # Create results directory if not exists
+        # sonuclar klasorunu olustur
         self.results_dir.mkdir(exist_ok=True)
         
-        # Load configurations
+        # ayarlari yukle
         self.settings = self._load_settings()
         self.profiles = self._load_profiles()
         
-        # Tool inventory - 46 tools across 7 categories
+        # arac envanteri
         self.tools = {
             "recon": {
                 "name": "🔍 Reconnaissance & OSINT",
@@ -535,7 +535,7 @@ class CyberToolkit:
         }
     
     def _load_settings(self) -> dict:
-        """Load settings from config file."""
+        """Ayarlari dosyadan yukle"""
         settings_file = self.config_dir / "settings.json"
         if settings_file.exists():
             try:
@@ -552,7 +552,7 @@ class CyberToolkit:
         }
     
     def _load_profiles(self) -> dict:
-        """Load scan profiles from config file."""
+        """Tarama profillerini yukle"""
         profiles_file = self.config_dir / "profiles.json"
         if profiles_file.exists():
             try:
@@ -563,14 +563,14 @@ class CyberToolkit:
         return {}
     
     def _save_settings(self):
-        """Save current settings to file."""
+        """Ayarlari dosyaya kaydet"""
         settings_file = self.config_dir / "settings.json"
         self.config_dir.mkdir(exist_ok=True)
         with open(settings_file, 'w') as f:
             json.dump(self.settings, f, indent=4)
     
     def show_banner(self):
-        """Display the application banner."""
+        """Uygulama banner'ini goster"""
         banner_text = """
 [bold cyan]███████╗ ██████╗ ██╗   ██╗██╗  ██╗[/bold cyan]
 [bold cyan]██╔════╝██╔═══██╗██║   ██║██║  ██║[/bold cyan]
@@ -581,7 +581,7 @@ class CyberToolkit:
         
         console.print(banner_text)
         
-        # Status bar
+        # durum cubugu
         total_tools = len(self._get_all_tools())
         installed = sum(1 for _, t in self._get_all_tools() if self.check_tool_installed(t["cmd"]))
         
@@ -592,7 +592,7 @@ class CyberToolkit:
         console.print(f"\n  {status_text}\n")
     
     def _get_all_tools(self) -> List[Tuple[str, dict]]:
-        """Get flat list of all tools."""
+        """Tum araclari duz liste olarak getir"""
         all_tools = []
         for category in self.tools.values():
             for tool_name, tool_info in category["tools"].items():
@@ -600,11 +600,11 @@ class CyberToolkit:
         return all_tools
     
     def check_tool_installed(self, cmd: str) -> bool:
-        """Check if a tool is installed."""
+        """Aracin kurulu olup olmadigini kontrol et"""
         return shutil.which(cmd) is not None
     
     def show_main_menu(self) -> List[str]:
-        """Display main menu and return options."""
+        """Ana menuyu goster"""
         
         menu_items = []
         menu_rows = []
@@ -623,7 +623,7 @@ class CyberToolkit:
             menu_rows.append(f"  [bold cyan]{idx}[/bold cyan]  {category['name']} [dim]{status}[/dim]")
             menu_items.append(key)
         
-        # Create menu panel
+        # menu paneli
         menu_content = "\n".join(menu_rows)
         menu_content += "\n\n[dim]─────────────────────────────────────────[/dim]"
         menu_content += "\n  [bold magenta]7[/bold magenta]  💻 Custom Command"
@@ -636,7 +636,7 @@ class CyberToolkit:
         return menu_items
     
     def show_category_tools(self, category_key: str) -> List[Tuple[str, dict]]:
-        """Display tools in a category."""
+        """Kategorideki araclari goster"""
         category = self.tools[category_key]
         
         console.print(f"\n[bold]{category['name']}[/bold]")
@@ -661,7 +661,7 @@ class CyberToolkit:
         return tools_list
     
     def run_tool(self, tool_info: dict, tool_name: str):
-        """Execute a selected tool."""
+        """Secilen araci calistir"""
         console.print(f"\n[bold cyan]═══ {tool_info['name']} ═══[/bold cyan]\n")
         
         if not self.check_tool_installed(tool_info["cmd"]):
@@ -672,7 +672,7 @@ class CyberToolkit:
         
         console.print(f"[dim]Example: {tool_info['example']}[/dim]\n")
         
-        # Show options
+        # secenekler
         console.print("[bold]Select mode:[/bold]")
         console.print("  [1] Quick scan (target only)")
         console.print("  [2] Custom flags + target")
@@ -684,14 +684,14 @@ class CyberToolkit:
         if choice == "0":
             return
         elif choice == "1":
-            # Quick scan - just target
+            # hizli tarama - sadece hedef
             target = Prompt.ask("Enter target")
             if target:
                 cmd = f"{tool_info['cmd']} {target}"
                 if Confirm.ask(f"Execute: [cyan]{cmd}[/cyan]?"):
                     self._execute_command(cmd, tool_info["name"])
         elif choice == "2":
-            # Custom flags + target
+            # ozel bayraklar + hedef
             target = Prompt.ask("Enter target")
             if target:
                 flags = Prompt.ask("Enter flags", default="-sV -T4" if tool_info['cmd'] == 'nmap' else "")
@@ -699,7 +699,7 @@ class CyberToolkit:
                 if Confirm.ask(f"Execute: [cyan]{cmd}[/cyan]?"):
                     self._execute_command(cmd, tool_info["name"])
         elif choice == "3":
-            # Full custom command
+            # tam ozel komut
             console.print(f"\n[dim]Tool: {tool_info['cmd']}[/dim]")
             console.print(f"[dim]Example: {tool_info['example']}[/dim]\n")
             cmd = Prompt.ask("Enter full command")
@@ -708,7 +708,7 @@ class CyberToolkit:
                     self._execute_command(cmd, tool_info["name"])
     
     def _execute_command(self, cmd: str, tool_name: str):
-        """Execute command and save results."""
+        """Komutu calistir ve sonuclari kaydet"""
         console.print(f"\n[yellow]Executing: {cmd}[/yellow]\n")
         
         output_lines = []
@@ -728,15 +728,15 @@ class CyberToolkit:
             
             process.wait()
             
-            # Display full results in a panel
+            # sonuclari panelde goster
             full_output = ''.join(output_lines)
             console.print(Panel(full_output, title=f"[bold]{tool_name} Results[/bold]", border_style="green"))
             
-            # Ask for custom filename
+            # dosya adi sor
             default_name = f"{tool_name.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             custom_name = Prompt.ask("\nSave results as", default=default_name)
             
-            # Ensure .txt extension
+            # .txt uzantisi ekle
             if not custom_name.endswith('.txt'):
                 custom_name += '.txt'
             
@@ -760,7 +760,7 @@ class CyberToolkit:
         input("\nPress Enter to continue...")
     
     def show_settings(self):
-        """Display settings menu."""
+        """Ayarlar menusunu goster"""
         while True:
             console.print("\n[bold]⚙️ Settings & Configuration[/bold]\n")
             
@@ -790,16 +790,16 @@ class CyberToolkit:
                 self._reinstall_all_tools()
     
     def _reinstall_all_tools(self):
-        """Force reinstall all tools."""
+        """Tum araclari yeniden kur"""
         console.print("\n[bold yellow]⚠️ Reinstalling ALL tools...[/bold yellow]\n")
         
-        # Read package manager preference
+        # paket yoneticisi tercihini oku
         config_file = Path(__file__).parent / "config" / "pkgmgr.txt"
         pkgmgr = "apt"
         if config_file.exists():
             pkgmgr = config_file.read_text().strip()
         
-        # Tool packages
+        # arac paketleri
         tools_apt = ["nmap", "nikto", "gobuster", "sqlmap", "tcpdump", 
                      "netcat-traditional", "hydra", "aircrack-ng", 
                      "curl", "git", "wget", "jq"]
@@ -822,13 +822,13 @@ class CyberToolkit:
         input("\nPress Enter to continue...")
     
     def _view_config(self):
-        """View current configuration."""
+        """Mevcut ayarlari goster"""
         console.print("\n[bold]Current Configuration:[/bold]\n")
         console.print(json.dumps(self.settings, indent=2))
         input("\nPress Enter to continue...")
     
     def check_dependencies(self):
-        """Check which tools are installed."""
+        """Hangi araclarin kurulu oldugunu kontrol et"""
         console.print("\n[bold]Checking installed tools...[/bold]\n")
         
         all_tools = self._get_all_tools()
@@ -849,7 +849,7 @@ class CyberToolkit:
                     missing_tools.append((tool_name, tool_info["cmd"]))
                 progress.advance(task)
         
-        # Results table
+        # sonuc tablosu
         table = Table(title="Dependency Check Results", box=box.ROUNDED)
         table.add_column("Status", style="bold")
         table.add_column("Count", justify="right")
@@ -869,7 +869,7 @@ class CyberToolkit:
         input("\nPress Enter to continue...")
     
     def install_missing_tools(self):
-        """Guide user through installing missing tools."""
+        """Eksik araclari kurma rehberi"""
         console.print("\n[bold yellow]Tool Installation Guide[/bold yellow]\n")
         
         install_cmds = {
@@ -902,7 +902,7 @@ nuclei -update-templates
         input("\nPress Enter to continue...")
     
     def view_results(self):
-        """View saved results."""
+        """Kaydedilen sonuclari goster"""
         results = sorted(self.results_dir.glob("*.txt"), key=os.path.getmtime, reverse=True)
         
         if not results:
@@ -947,7 +947,7 @@ nuclei -update-templates
         input("\nPress Enter to continue...")
     
     def run(self):
-        """Main application loop."""
+        """Ana uygulama dongusu"""
         while True:
             try:
                 os.system('clear' if os.name != 'nt' else 'cls')
@@ -961,7 +961,7 @@ nuclei -update-templates
                     break
                 
                 elif choice == "7":
-                    # Custom Command
+                    # ozel komut
                     console.print("\n[bold magenta]═══ Custom Command ═══[/bold magenta]\n")
                     console.print("[dim]Type any shell command to execute[/dim]\n")
                     cmd = Prompt.ask("Command")
@@ -1013,8 +1013,8 @@ nuclei -update-templates
 
 def check_system_requirements() -> bool:
     """
-    Check if all system requirements are met and install missing ones.
-    Returns True if all critical requirements pass.
+    Sistem gereksinimlerini kontrol et ve eksik olanlari kur.
+    Kritik gereksinimler karsilanirsa True doner.
     """
     console.print("\n[bold cyan]═══ FOU4 System Requirements Check ═══[/bold cyan]\n")
     
@@ -1022,7 +1022,7 @@ def check_system_requirements() -> bool:
     warnings = []
     missing_pip_packages = []
     
-    # 1. Python version check
+    # python versiyon kontrolu
     py_version = sys.version_info
     if py_version >= (3, 8):
         console.print(f"  [green]✓[/green] Python {py_version.major}.{py_version.minor}.{py_version.micro}")
@@ -1030,7 +1030,7 @@ def check_system_requirements() -> bool:
         console.print(f"  [red]✗[/red] Python {py_version.major}.{py_version.minor} (3.8+ required)")
         all_passed = False
     
-    # 2. Required Python packages - check and install
+    # gerekli python paketleri - kontrol et ve kur
     required_packages = [
         ('rich', 'Rich TUI', 'rich'),
         ('yaml', 'PyYAML', 'pyyaml'),
@@ -1055,7 +1055,7 @@ def check_system_requirements() -> bool:
             console.print(f"    [yellow]○[/yellow] {name} (installing...)")
             missing_pip_packages.append(pip_name)
     
-    # Install missing pip packages
+    # eksik pip paketlerini kur
     if missing_pip_packages:
         console.print(f"\n  [cyan]Installing {len(missing_pip_packages)} missing packages...[/cyan]")
         try:
@@ -1069,7 +1069,7 @@ def check_system_requirements() -> bool:
             console.print(f"  [red]✗[/red] Failed to install some packages")
             warnings.append("Some Python packages could not be installed")
     
-    # 3. Core security tools
+    # temel guvenlik araclari
     core_tools = [
         ('nmap', 'Nmap'),
         ('curl', 'cURL'),
