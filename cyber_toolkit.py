@@ -173,8 +173,8 @@ def auto_install_system_tools():
         if pkgmgr == "apt":
             subprocess.run(sudo_prefix + ["apt-get", "update"])
             subprocess.run(sudo_prefix + ["apt-get", "install", "-y"] + missing_pkgs)
-        else:  # pacman
-            subprocess.run(sudo_prefix + ["pacman", "-Sy", "--noconfirm"] + missing_pkgs)
+        else:  # pacman - show progress, ask for confirmation
+            subprocess.run(sudo_prefix + ["pacman", "-Sy"] + missing_pkgs)
     else:
         print("\n━━━ All tools installed ✅ ━━━")
     
