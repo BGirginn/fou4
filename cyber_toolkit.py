@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FOU4 - Guvenlik Test Araci
+AMAOTO - Guvenlik Test Araci
 Terminal tabanli pentest ve guvenlik degerlendirme toolkit'i
 """
 
@@ -263,7 +263,7 @@ def auto_install_system_tools():
 
 
 # baslangicta bagimliliklari kontrol et
-print("\n🔧 FOU4 - Startup Check\n")
+print("\n AMAOTO - Baslangic Kontrolu\n")
 auto_install_dependencies(silent=False)
 auto_install_system_tools()
 
@@ -957,7 +957,7 @@ nuclei -update-templates
                 choice = Prompt.ask("\n[bold cyan]Select option[/bold cyan]", default="0")
                 
                 if choice == "0":
-                    console.print("\n[green]Thanks for using FOU4! Stay ethical![/green]")
+                    console.print("\n[green]AMAOTO kullandigin icin tesekkurler![/green]")
                     break
                 
                 elif choice == "7":
@@ -1016,7 +1016,7 @@ def check_system_requirements() -> bool:
     Sistem gereksinimlerini kontrol et ve eksik olanlari kur.
     Kritik gereksinimler karsilanirsa True doner.
     """
-    console.print("\n[bold cyan]═══ FOU4 System Requirements Check ═══[/bold cyan]\n")
+    console.print("\n[bold cyan]=== AMAOTO Sistem Gereksinimleri ===[/bold cyan]\n")
     
     all_passed = True
     warnings = []
@@ -1159,7 +1159,7 @@ def main():
     """Entry point."""
     try:
         # Fully automatic system check and installation
-        console.print("\n[bold cyan]🔧 FOU4 - Automatic Setup[/bold cyan]\n")
+        console.print("\n[bold cyan] AMAOTO - Otomatik Kurulum[/bold cyan]\n")
         
         # Check and install/update everything automatically
         requirements_ok = check_system_requirements()
@@ -1174,7 +1174,7 @@ def main():
             console.print("\n[bold]📋 Final system status:[/bold]")
             check_system_requirements()
         
-        console.print("\n[green]✓ Setup complete! Starting FOU4...[/green]")
+        console.print("\n[green] Kurulum tamam! AMAOTO baslatiliyor...[/green]")
         
         toolkit = CyberToolkit()
         toolkit.run()

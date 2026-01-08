@@ -1,4 +1,4 @@
-# FOU4 - Penetration Testing Toolkit
+# AMAOTO - Penetration Testing Toolkit
 
 > Unified terminal interface for security assessment tools. Supports Debian/Ubuntu, Raspberry Pi, and Arch Linux.
 
@@ -9,43 +9,43 @@
 
 ## Features
 
-- 🔧 **Auto-Install** - Automatically detects and installs missing tools
-- 📊 **Progress Tracking** - Visual progress bar during installation
-- 🎯 **Multi-Platform** - Works on apt (Debian/Pi) and pacman (Arch)
-- 💻 **Custom Commands** - Run any shell command directly
-- 📁 **Result Saving** - Saves scan outputs with timestamps
+- Auto-Install: Eksik araclari otomatik tespit edip kurar
+- Progress Tracking: Kurulum sirasinda gorsel ilerleme cubugu
+- Multi-Platform: apt (Debian/Pi) ve pacman (Arch) destegi
+- Custom Commands: Istedigin shell komutunu dogrudan calistir
+- Result Saving: Tarama ciktilarini zaman damgasiyla kaydet
 
-## Quick Start
+## Kurulum
 
 ```bash
-git clone https://github.com/BGirginn/fou4.git
-cd fou4
+git clone https://github.com/BGirginn/amaoto.git
+cd amaoto
 python3 cyber_toolkit.py
 ```
 
-First run will:
-1. Ask for package manager (apt/pacman)
-2. Install Python dependencies
-3. Install missing security tools
-4. Launch the toolkit
+Ilk calistirmada:
+1. Paket yoneticisi sorar (apt/pacman)
+2. Python bagimliklarini kurar
+3. Eksik guvenlik araclarini kurar
+4. Toolkit'i baslatir
 
-## Tools (26)
+## Araclar (26)
 
-| Category | Tools |
-|----------|-------|
-| **Recon** | nmap, masscan, subfinder, httpx, dnsx |
-| **Web** | nikto, gobuster, sqlmap, nuclei, ffuf |
-| **Network** | wireshark, tshark, tcpdump, netcat |
-| **Password** | hydra, john, hashcat, medusa |
-| **Wireless** | aircrack-ng, reaver, wifite |
-| **Utils** | curl, git, wget, jq |
+| Kategori | Araclar |
+|----------|---------|
+| Kesif | nmap, masscan, subfinder, httpx, dnsx |
+| Web | nikto, gobuster, sqlmap, nuclei, ffuf |
+| Ag | wireshark, tshark, tcpdump, netcat |
+| Sifre | hydra, john, hashcat, medusa |
+| Kablosuz | aircrack-ng, reaver, wifite |
+| Yardimci | curl, git, wget, jq |
 
-## Requirements
+## Gereksinimler
 
 - Python 3.10+
 - Linux (Debian, Ubuntu, Raspberry Pi OS, Arch)
-- Root/sudo access for tool installation
+- Root/sudo erisimi (arac kurulumu icin)
 
-## License
+## Lisans
 
-MIT © [BGirginn](https://bgirgin.dev)
+MIT - [BGirginn](https://bgirgin.dev)
