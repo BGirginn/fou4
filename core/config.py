@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 @dataclass
 class Settings:
     """Application settings container."""
-    version: str = "1.5.0"
+    version: str = "3.0.0"  # loaded from core.version at runtime
     results_dir: str = "results"
     log_level: str = "INFO"
     default_target: str = ""

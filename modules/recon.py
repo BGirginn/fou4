@@ -3,6 +3,8 @@ Reconnaissance module for CyberToolkit.
 Provides high-level interfaces for reconnaissance tools.
 """
 
+import json
+import shlex
 import subprocess
 import shutil
 from pathlib import Path
@@ -74,8 +76,7 @@ class ReconModule:
         # Execute
         try:
             process = subprocess.run(
-                cmd,
-                shell=True,
+                shlex.split(cmd),
                 capture_output=True,
                 text=True,
                 timeout=self.config.settings.timeout_seconds
@@ -141,8 +142,7 @@ class ReconModule:
         
         try:
             subprocess.run(
-                cmd,
-                shell=True,
+                shlex.split(cmd),
                 capture_output=True,
                 text=True,
                 timeout=self.config.settings.timeout_seconds
@@ -188,8 +188,7 @@ class ReconModule:
         
         try:
             subprocess.run(
-                cmd,
-                shell=True,
+                shlex.split(cmd),
                 capture_output=True,
                 text=True,
                 timeout=self.config.settings.timeout_seconds
@@ -197,7 +196,7 @@ class ReconModule:
             
             results = []
             if output_file.exists():
-                import json
+
                 with open(output_file, 'r') as f:
                     for line in f:
                         if line.strip():

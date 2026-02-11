@@ -4,8 +4,10 @@ Enables tool chaining and automated multi-step workflows.
 """
 
 import json
+import shlex
 import subprocess
 import shutil
+import yaml
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Union
@@ -109,7 +111,7 @@ class Workflow:
         
         with open(filepath, 'r') as f:
             if filepath.suffix in ['.yaml', '.yml']:
-                import yaml
+
                 data = yaml.safe_load(f)
             else:
                 data = json.load(f)
@@ -239,25 +241,38 @@ class WorkflowEngine:
             timestamp = format_timestamp(fmt='file')
             output_file = str(self.results_dir / f"{step.tool}_{timestamp}.txt")
         
-        # Build command
-        cmd = f"{step.tool} {flags}"
-        if input_file:
-            # Pipe or input file based on tool
-            if step.tool in ['httpx', 'nuclei']:
-                cmd = f"cat {input_file} | {cmd}"
-            else:
-                cmd = f"{cmd} -iL {input_file}"
+        # Build command as list (no shell=True)
+        cmd_parts = [step.tool] + shlex.split(flags)
+        cmd_parts.extend(["-o", output_file])
         
-        cmd = f"{cmd} -o {output_file}"
-        
+        stdin_file = None
         try:
-            process = subprocess.run(
-                cmd,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=step.timeout
-            )
+            if input_file:
+                if step.tool in ['httpx', 'nuclei']:
+                    # Open input file as stdin instead of cat pipe
+                    stdin_file = open(input_file, 'r')
+                    process = subprocess.run(
+                        cmd_parts,
+                        stdin=stdin_file,
+                        capture_output=True,
+                        text=True,
+                        timeout=step.timeout
+                    )
+                else:
+                    cmd_parts.extend(["-iL", input_file])
+                    process = subprocess.run(
+                        cmd_parts,
+                        capture_output=True,
+                        text=True,
+                        timeout=step.timeout
+                    )
+            else:
+                process = subprocess.run(
+                    cmd_parts,
+                    capture_output=True,
+                    text=True,
+                    timeout=step.timeout
+                )
             
             step.status = StepStatus.COMPLETED
             step.completed_at = datetime.now()
@@ -307,6 +322,9 @@ class WorkflowEngine:
                     success=False
                 )
             return False
+        finally:
+            if stdin_file:
+                stdin_file.close()
     
     def execute(self, workflow: Workflow, target: str) -> Dict[str, Any]:
         """
@@ -350,49 +368,49 @@ class WorkflowEngine:
                 'error': step.error
             })
             
-        if not success and step.status == StepStatus.FAILED:
-            # Stop on failure (could make configurable)
-            results['status'] = 'failed'
-            break
-    else:
-        results['status'] = 'completed'
-    
-    results['completed_at'] = datetime.now().isoformat()
+            if not success and step.status == StepStatus.FAILED:
+                # Stop on failure (could make configurable)
+                results['status'] = 'failed'
+                break
+        else:
+            results['status'] = 'completed'
+        
+        results['completed_at'] = datetime.now().isoformat()
 
-    duration_seconds = (
-        datetime.fromisoformat(results['completed_at']) - 
-        datetime.fromisoformat(results['started_at'])
-    ).total_seconds()
-    
-    scan_result = ScanResult(
-        tool=workflow.name,
-        target=target,
-        status=results['status'],
-        duration_seconds=duration_seconds
-    )
-    scan_result.metadata['steps'] = results['steps']
-    results['duration_seconds'] = duration_seconds
-    results['scan_summary'] = scan_result.summary()
-
-    if self.audit:
-        self.audit.log(
-            AuditAction.SCAN_COMPLETE,
-            user_id="workflow",
-            username="workflow",
-            resource_type="workflow",
-            resource_id=workflow.name,
-            details={
-                "target": target,
-                "status": results['status'],
-                "steps": len(results['steps']),
-                "duration_seconds": duration_seconds
-            },
-            success=(results['status'] == 'completed')
+        duration_seconds = (
+            datetime.fromisoformat(results['completed_at']) - 
+            datetime.fromisoformat(results['started_at'])
+        ).total_seconds()
+        
+        scan_result = ScanResult(
+            tool=workflow.name,
+            target=target,
+            status=results['status'],
+            duration_seconds=duration_seconds
         )
+        scan_result.metadata['steps'] = results['steps']
+        results['duration_seconds'] = duration_seconds
+        results['scan_summary'] = scan_result.summary()
 
-    self._emit('workflow_complete', results)
-    
-    return results
+        if self.audit:
+            self.audit.log(
+                AuditAction.SCAN_COMPLETE,
+                user_id="workflow",
+                username="workflow",
+                resource_type="workflow",
+                resource_id=workflow.name,
+                details={
+                    "target": target,
+                    "status": results['status'],
+                    "steps": len(results['steps']),
+                    "duration_seconds": duration_seconds
+                },
+                success=(results['status'] == 'completed')
+            )
+
+        self._emit('workflow_complete', results)
+        
+        return results
 
 
 # Pre-defined workflows

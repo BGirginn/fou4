@@ -4,14 +4,16 @@ Provides REST API endpoints for project management, scans, and findings.
 """
 
 import asyncio
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Query, Request
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Query, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 
 import sys
@@ -23,6 +25,7 @@ from core.app_context import get_app_context
 from core.database import ScanStatus, FindingStatus, Severity, Scan
 from core.enterprise import AuditAction
 from core.integrations import IntegrationManager
+from core.version import __version__
 
 
 # ==================== Pydantic Models ====================
@@ -73,6 +76,29 @@ class CVELookupRequest(BaseModel):
 
 ctx = get_app_context()
 
+# API Key auth
+API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+def _load_api_key() -> str:
+    """Load API key from environment or config."""
+    key = os.environ.get("CYBERTOOLKIT_API_KEY", "")
+    if not key:
+        # fallback: read from settings
+        key = ctx.config.settings.api_keys.get("api_secret", "")
+    return key
+
+
+async def verify_api_key(api_key: str = Security(API_KEY_HEADER)):
+    """Verify the API key from request header."""
+    expected = _load_api_key()
+    if not expected:
+        # No key configured — allow access (dev mode)
+        return True
+    if not api_key or api_key != expected:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    return True
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
@@ -89,18 +115,39 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="CyberToolkit API",
     description="REST API for CyberToolkit Security Platform",
-    version="3.0.0",
+    version=__version__,
     lifespan=lifespan
 )
 
-# CORS middleware
+# CORS middleware — restricted to localhost
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:8080",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8080",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def api_key_middleware(request: Request, call_next):
+    """Enforce API key for /api/ routes."""
+    public_paths = {"/", "/health", "/docs", "/openapi.json", "/redoc"}
+    if request.url.path.startswith("/api/"):
+        expected = _load_api_key()
+        if expected:
+            provided = request.headers.get("X-API-Key", "")
+            if provided != expected:
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Invalid or missing API key"}
+                )
+    return await call_next(request)
 
 
 def get_pm() -> ProjectManager:
@@ -125,7 +172,7 @@ async def root():
     """API root endpoint."""
     return {
         "name": "CyberToolkit API",
-        "version": "3.0.0",
+        "version": __version__,
         "status": "running",
         "timestamp": datetime.now().isoformat()
     }

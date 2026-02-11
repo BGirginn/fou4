@@ -1,5 +1,5 @@
 {
-    "version": "1.5",
+    "version": "3.0.0",
     "results_dir": "results",
     "log_level": "INFO",
     "default_target": "",

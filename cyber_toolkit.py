@@ -6,7 +6,11 @@ amaoto
 import os
 import sys
 import json
+import shlex
 import shutil
+import signal
+import select
+import time
 import subprocess
 from pathlib import Path
 from datetime import datetime
@@ -19,25 +23,12 @@ os.environ["PATH"] = f"{go_bin}:{local_bin}:{os.environ.get('PATH', '')}"
 
 
 def ensure_requirements_file() -> Path:
-    """requirements.txt dosyasini olustur veya kontrol et"""
+    """requirements.txt dosyasinin yolunu dondur"""
     requirements_file = Path(__file__).parent / "requirements.txt"
     
-    required_content = """rich>=13.0.0
-pyyaml>=6.0
-click>=8.0
-python-dotenv>=1.0
-sqlalchemy>=2.0.0
-pydantic>=2.0.0
-requests>=2.31.0
-fastapi>=0.109.0
-uvicorn>=0.27.0
-PyJWT>=2.8.0
-websockets>=12.0
-"""
-    
     if not requirements_file.exists():
-        print("⚠️  requirements.txt not found, creating...")
-        requirements_file.write_text(required_content)
+        print("⚠️  requirements.txt not found!")
+        print("    Please ensure requirements.txt is in the project root.")
     
     return requirements_file
 
@@ -230,41 +221,129 @@ def auto_install_system_tools():
     is_root = os.geteuid() == 0
     sudo_prefix = [] if is_root else ["sudo"]
     
+    # noninteractive ortam degiskeni (wireshark gibi paketler icin)
+    noninteractive_env = {**os.environ, "DEBIAN_FRONTEND": "noninteractive"}
+    
     # once paket veritabanini guncelle
     if missing_pkgs:
         print("📥 Updating package database...")
         if pkgmgr == "apt":
-            subprocess.run(sudo_prefix + ["apt-get", "update", "-qq"], capture_output=True)
+            subprocess.run(sudo_prefix + ["apt-get", "update", "-qq"], capture_output=True, env=noninteractive_env, timeout=120)
         else:
-            subprocess.run(sudo_prefix + ["pacman", "-Sy"], capture_output=True)
+            subprocess.run(sudo_prefix + ["pacman", "-Sy"], capture_output=True, timeout=120)
         print("   Done!\n")
     
     current = 0
     
-    # ilerleme cubugu fonksiyonu
+    # ilerleme cubugu fonksiyonu (###--- stili)
     def show_progress(current, total, name, status=""):
         bar_len = 30
         filled = int(bar_len * current / total) if total > 0 else 0
-        bar = "█" * filled + "░" * (bar_len - filled)
+        bar = "#" * filled + "-" * (bar_len - filled)
         pct = int(100 * current / total) if total > 0 else 0
-        print(f"\r   [{bar}] {pct:3d}% ({current}/{total}) {name[:20]:<20} {status}", end="", flush=True)
+        line = f"\r   [{bar}] {pct:3d}% ({current}/{total}) {name[:20]:<20} {status}"
+        print(f"\r{' ' * 100}", end="", flush=True)
+        print(line, end="", flush=True)
+    
+    def run_and_stream(cmd_list, env=None, timeout=300):
+        """Komutu calistir, ciktisini anlik olarak goster. returncode dondurur."""
+        proc = subprocess.Popen(
+            cmd_list,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            env=env,
+            text=True,
+            bufsize=1
+        )
+        
+        try:
+            start = time.time()
+            while True:
+                # timeout kontrolu
+                elapsed = time.time() - start
+                if elapsed > timeout:
+                    proc.kill()
+                    proc.wait()
+                    return -999  # timeout kodu
+                
+                # cikti oku
+                line = proc.stdout.readline()
+                if not line and proc.poll() is not None:
+                    break
+                if line:
+                    clean = line.strip()
+                    if clean:
+                        # satiri girintili goster
+                        display = clean[:80]  # max 80 karakter
+                        print(f"      │ {display}", flush=True)
+            
+            proc.wait()
+            return proc.returncode
+        except Exception:
+            proc.kill()
+            proc.wait()
+            return proc.returncode if proc.returncode is not None else 1
     
     # sistem paketlerini kur
     if missing_pkgs:
         print(f"━━━ [1/2] System Packages ({len(missing_pkgs)}) ━━━\n")
         
-        for cmd, pkg in missing_pkgs:
-            current += 1
-            show_progress(current, all_missing, pkg)
-            
-            if pkgmgr == "apt":
-                result = subprocess.run(sudo_prefix + ["apt-get", "install", "-y", "-qq", pkg], capture_output=True)
-            else:
-                result = subprocess.run(sudo_prefix + ["pacman", "-S", "--noconfirm", "--needed", pkg], capture_output=True)
-            
-            status = "✅" if result.returncode == 0 else "❌"
-            show_progress(current, all_missing, pkg, status)
-            print()  # newline
+        try:
+            for cmd, pkg in missing_pkgs:
+                current += 1
+                show_progress(current, all_missing, pkg, "⏳")
+                print()  # alt satira gec
+                
+                try:
+                    if pkgmgr == "apt":
+                        returncode = run_and_stream(
+                            sudo_prefix + ["apt-get", "install", "-y", pkg],
+                            env=noninteractive_env, timeout=300
+                        )
+                    else:
+                        returncode = run_and_stream(
+                            sudo_prefix + ["pacman", "-S", "--noconfirm", "--needed", pkg],
+                            timeout=300
+                        )
+                    
+                    if returncode == -999:
+                        status = "⏱️"
+                        print(f"      └ zaman asimi (>5dk), atlandi", flush=True)
+                    elif returncode == 0:
+                        # boyut bilgisi
+                        size_info = ""
+                        if pkgmgr == "apt":
+                            size_check = subprocess.run(
+                                ["dpkg-query", "-W", "--showformat=${Installed-Size}", pkg],
+                                capture_output=True, text=True
+                            )
+                            if size_check.returncode == 0 and size_check.stdout.strip():
+                                try:
+                                    kb = int(size_check.stdout.strip())
+                                    if kb >= 1024:
+                                        size_info = f" ({kb // 1024} MB)"
+                                    else:
+                                        size_info = f" ({kb} KB)"
+                                except ValueError:
+                                    pass
+                        status = "✅"
+                        print(f"      └ tamamlandi{size_info}", flush=True)
+                    else:
+                        status = "❌"
+                        print(f"      └ hata (kod: {returncode})", flush=True)
+                
+                except Exception as e:
+                    status = "❌"
+                    print(f"      └ hata: {e}", flush=True)
+                
+                print()
+                
+        except KeyboardInterrupt:
+            print(f"\n\n⚠️  Kurulum iptal edildi (Ctrl+C)")
+            installed = sum(1 for cmd in tools.keys() if shutil.which(cmd))
+            print(f"   Simdiye kadar kurulan: {installed}/{len(tools)} sistem araci")
+            print(f"   Tekrar calistirarak kalan araclari kurabilirsiniz.\n")
+            return
     
     # go araclarini kur
     if missing_go:
@@ -277,15 +356,40 @@ def auto_install_system_tools():
             os.environ["GOPATH"] = go_path
             os.environ["PATH"] = f"{go_path}/bin:/usr/local/go/bin:{os.environ.get('PATH', '')}"
             
-            for cmd, url in missing_go:
-                current += 1
-                show_progress(current, all_missing, cmd)
-                
-                result = subprocess.run([go_bin, "install", url], env=os.environ, capture_output=True)
-                
-                status = "✅" if result.returncode == 0 else "❌"
-                show_progress(current, all_missing, cmd, status)
-                print()  # newline
+            try:
+                for cmd, url in missing_go:
+                    current += 1
+                    show_progress(current, all_missing, cmd, "⏳")
+                    print()
+                    
+                    try:
+                        returncode = run_and_stream(
+                            [go_bin, "install", url],
+                            env=os.environ, timeout=300
+                        )
+                        
+                        if returncode == -999:
+                            status = "⏱️"
+                            print(f"      └ zaman asimi (>5dk), atlandi", flush=True)
+                        elif returncode == 0:
+                            status = "✅"
+                            print(f"      └ tamamlandi", flush=True)
+                        else:
+                            status = "❌"
+                            print(f"      └ hata (kod: {returncode})", flush=True)
+                    
+                    except Exception as e:
+                        status = "❌"
+                        print(f"      └ hata: {e}", flush=True)
+                    
+                    print()
+                    
+            except KeyboardInterrupt:
+                print(f"\n\n⚠️  Kurulum iptal edildi (Ctrl+C)")
+                installed = sum(1 for c in go_tools.keys() if shutil.which(c))
+                print(f"   Simdiye kadar kurulan: {installed}/{len(go_tools)} Go araci")
+                print(f"   Tekrar calistirarak kalan araclari kurabilirsiniz.\n")
+                return
         else:
             print("   Go compiler not found - skipping Go tools")
     
@@ -324,7 +428,7 @@ except ImportError:
 console = Console()
 
 # versiyon bilgisi
-VERSION = "2.1.1"
+from core.version import __version__ as VERSION
 CODENAME = "Enterprise"
 
 
@@ -801,8 +905,7 @@ class CyberToolkit:
         
         try:
             process = subprocess.Popen(
-                cmd,
-                shell=True,
+                shlex.split(cmd),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True
@@ -885,26 +988,105 @@ class CyberToolkit:
         if config_file.exists():
             pkgmgr = config_file.read_text().strip()
         
-        # arac paketleri
-        tools_apt = ["nmap", "nikto", "gobuster", "sqlmap", "tcpdump", 
-                     "netcat-traditional", "hydra", "aircrack-ng", 
-                     "curl", "git", "wget", "jq"]
-        tools_pacman = ["nmap", "nikto", "gobuster", "sqlmap", "tcpdump",
-                        "openbsd-netcat", "hydra", "aircrack-ng",
-                        "curl", "git", "wget", "jq"]
+        # tum arac paketleri (auto_install_system_tools ile ayni)
+        tools = {
+            "nmap": ("nmap", "nmap"),
+            "masscan": ("masscan", "masscan"),
+            "nikto": ("nikto", "nikto"),
+            "gobuster": ("gobuster", "gobuster"),
+            "sqlmap": ("sqlmap", "sqlmap"),
+            "wireshark": ("wireshark", "wireshark-qt"),
+            "tshark": ("tshark", "wireshark-cli"),
+            "tcpdump": ("tcpdump", "tcpdump"),
+            "nc": ("netcat-traditional", "openbsd-netcat"),
+            "hydra": ("hydra", "hydra"),
+            "john": ("john", "john"),
+            "hashcat": ("hashcat", "hashcat"),
+            "medusa": ("medusa", "medusa"),
+            "aircrack-ng": ("aircrack-ng", "aircrack-ng"),
+            "reaver": ("reaver", "reaver"),
+            "wifite": ("wifite", "wifite"),
+            "curl": ("curl", "curl"),
+            "git": ("git", "git"),
+            "wget": ("wget", "wget"),
+            "jq": ("jq", "jq"),
+            "go": ("golang-go", "go"),
+        }
         
         is_root = os.geteuid() == 0
         sudo_prefix = [] if is_root else ["sudo"]
         
-        if pkgmgr == "apt":
-            console.print("[cyan]Running: apt-get install --reinstall ...[/cyan]\n")
-            subprocess.run(sudo_prefix + ["apt-get", "update"])
-            subprocess.run(sudo_prefix + ["apt-get", "install", "--reinstall", "-y"] + tools_apt)
-        else:
-            console.print("[cyan]Running: pacman -S ...[/cyan]\n")
-            subprocess.run(sudo_prefix + ["pacman", "-S", "--noconfirm"] + tools_pacman)
+        # noninteractive env
+        noninteractive_env = os.environ.copy()
+        noninteractive_env["DEBIAN_FRONTEND"] = "noninteractive"
         
-        console.print("\n[green]✅ Reinstallation complete![/green]")
+        # paket listesini olustur
+        pkg_list = []
+        for cmd, (apt_pkg, pacman_pkg) in tools.items():
+            pkg = apt_pkg if pkgmgr == "apt" else pacman_pkg
+            pkg_list.append((cmd, pkg))
+        
+        total = len(pkg_list)
+        installed = 0
+        failed = []
+        
+        def show_progress(current, total_count, name, status=""):
+            bar_len = 30
+            filled = int(bar_len * current / total_count) if total_count > 0 else 0
+            bar = "#" * filled + "-" * (bar_len - filled)
+            pct = int(100 * current / total_count) if total_count > 0 else 0
+            line = f"\r   [{bar}] {pct:3d}% ({current}/{total_count}) {name[:20]:<20} {status}"
+            print(f"\r{' ' * 100}", end="", flush=True)
+            print(line, end="", flush=True)
+        
+        try:
+            if pkgmgr == "apt":
+                # update once
+                console.print("[cyan]Running: apt-get update...[/cyan]")
+                run_and_stream(sudo_prefix + ["apt-get", "update", "-qq"],
+                               env=noninteractive_env, timeout=120)
+            
+            for i, (cmd, pkg) in enumerate(pkg_list, 1):
+                show_progress(i, total, pkg, "⏳")
+                print()
+                
+                try:
+                    if pkgmgr == "apt":
+                        rc = run_and_stream(
+                            sudo_prefix + ["apt-get", "install", "--reinstall", "-y", "-qq", pkg],
+                            env=noninteractive_env, timeout=300
+                        )
+                    else:
+                        rc = run_and_stream(
+                            sudo_prefix + ["pacman", "-S", "--noconfirm", pkg],
+                            timeout=300
+                        )
+                    
+                    if rc == 0:
+                        show_progress(i, total, pkg, "✅")
+                        installed += 1
+                    elif rc == -999:
+                        show_progress(i, total, pkg, "⏱️ timeout")
+                        failed.append(pkg)
+                    else:
+                        show_progress(i, total, pkg, "❌")
+                        failed.append(pkg)
+                    print()
+                except Exception as e:
+                    show_progress(i, total, pkg, "❌")
+                    print()
+                    failed.append(pkg)
+        
+        except KeyboardInterrupt:
+            print("\n")
+            console.print(f"[yellow]⚠️ Interrupted! {installed}/{total} reinstalled.[/yellow]")
+            input("\nPress Enter to continue...")
+            return
+        
+        print("\n")
+        console.print(f"[green]✅ Reinstallation complete: {installed}/{total}[/green]")
+        if failed:
+            console.print(f"[red]Failed: {', '.join(failed)}[/red]")
         input("\nPress Enter to continue...")
     
     def _view_config(self):
@@ -1036,7 +1218,7 @@ nuclei -update-templates
         """Ana uygulama dongusu"""
         while True:
             try:
-                os.system('clear' if os.name != 'nt' else 'cls')
+                console.clear()
                 self.show_banner()
                 
                 options = self.show_main_menu()
@@ -1065,7 +1247,7 @@ nuclei -update-templates
                     category_key = options[int(choice) - 1]
                     
                     while True:
-                        os.system('clear' if os.name != 'nt' else 'cls')
+                        console.clear()
                         self.show_banner()
                         
                         tools_list = self.show_category_tools(category_key)

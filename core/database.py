@@ -3,7 +3,7 @@ Database models for CyberToolkit workspace management.
 Uses SQLAlchemy ORM for SQLite/PostgreSQL support.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from enum import Enum as PyEnum
 
@@ -53,8 +53,8 @@ class Project(Base):
     description = Column(Text, default="")
     scope_type = Column(String(50), default="mixed")  # domain, ip_range, mixed
     status = Column(String(50), default="active")  # active, archived, completed
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     # Configuration stored as JSON
     config = Column(JSON, default=dict)
@@ -94,7 +94,7 @@ class Target(Base):
     in_scope = Column(Boolean, default=True)
     tags = Column(JSON, default=list)  # JSON array of tags
     notes = Column(Text, default="")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationships
     project = relationship("Project", back_populates="targets")
@@ -174,8 +174,8 @@ class Finding(Base):
     references = Column(JSON, default=list)
     tags = Column(JSON, default=list)
     metadata = Column(JSON, default=dict)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     # Relationships
     scan = relationship("Scan", back_populates="findings")
@@ -210,8 +210,8 @@ class Note(Base):
     title = Column(String(255), nullable=False)
     content = Column(Text, default="")
     category = Column(String(100), default="general")  # general, finding, methodology
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     # Relationships
     project = relationship("Project", back_populates="notes")
@@ -237,8 +237,8 @@ class Session(Base):
     current_project_id = Column(Integer, nullable=True)
     current_target = Column(String(500), default="")
     state = Column(JSON, default=dict)  # Arbitrary state data
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     def to_dict(self) -> dict:
         return {
