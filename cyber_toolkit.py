@@ -224,6 +224,17 @@ def auto_install_system_tools():
     # noninteractive ortam degiskeni (wireshark gibi paketler icin)
     noninteractive_env = {**os.environ, "DEBIAN_FRONTEND": "noninteractive"}
     
+    # wireshark SUID dialog'unu onceden yanitla
+    if pkgmgr == "apt":
+        try:
+            subprocess.run(
+                sudo_prefix + ["bash", "-c",
+                    'echo "wireshark-common wireshark-common/install-setuid boolean false" | debconf-set-selections'],
+                capture_output=True, timeout=10
+            )
+        except Exception:
+            pass
+    
     # once paket veritabanini guncelle
     if missing_pkgs:
         print("📥 Updating package database...")
@@ -1019,6 +1030,17 @@ class CyberToolkit:
         # noninteractive env
         noninteractive_env = os.environ.copy()
         noninteractive_env["DEBIAN_FRONTEND"] = "noninteractive"
+        
+        # wireshark SUID dialog'unu onceden yanitla
+        if pkgmgr == "apt":
+            try:
+                subprocess.run(
+                    sudo_prefix + ["bash", "-c",
+                        'echo "wireshark-common wireshark-common/install-setuid boolean false" | debconf-set-selections'],
+                    capture_output=True, timeout=10
+                )
+            except Exception:
+                pass
         
         # paket listesini olustur
         pkg_list = []
