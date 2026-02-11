@@ -895,6 +895,40 @@ class CyberToolkit:
     def check_tool_installed(self, cmd: str) -> bool:
         """Aracin kurulu olup olmadigini kontrol et"""
         return shutil.which(cmd) is not None
+
+    def _show_help(self):
+        """Show help and about info"""
+        help_text = """
+[bold cyan]amaoto Help & Guide[/bold cyan]
+
+[bold white]1. Tool Categories (1-6)[/bold white]
+Tools are grouped by function. Select a category to see available tools.
+- [green]Green dot[/green]: All tools in this category are installed.
+- [yellow]Yellow dot[/yellow]: Some tools are installed.
+- [red]Red dot[/red]: No tools are installed.
+
+[bold white]2. Modes[/bold white]
+When running a tool, you can choose:
+- [cyan]Quick Scan[/cyan]: Runs the tool with default, safe arguments against the target.
+- [cyan]Custom Flags[/cyan]: Adds your extra flags to the default command.
+- [cyan]Full Custom[/cyan]: You write the entire command line (advanced).
+
+[bold white]3. Global Options[/bold white]
+- [bold]7. List All Tools[/bold]: Flat list of everything + Search feature.
+- [bold]10. View Results[/bold]: See output of previous scans.
+- [bold]11. Health Check[/bold]: Re-run the startup dependency check.
+
+[bold white]4. Troubleshooting[/bold white]
+- If a tool is missing, use Option 10 or 5 (Reinstall) to fix it.
+- Installation errors are shown in the log.
+- New tools are added via `apt` or `go install`.
+
+[dim]Version: {0} | Code: {1}[/dim]
+""".format(VERSION, CODENAME)
+        
+        console.print(Panel(help_text, title="Help", border_style="yellow"))
+        input("\nPress Enter to continue...")
+
     
     def show_main_menu(self) -> List[str]:
         """Ana menuyu goster"""
@@ -918,12 +952,13 @@ class CyberToolkit:
         
         # menu paneli
         menu_content = "\n".join(menu_rows)
-        menu_content += "\n  [bold cyan]6[/bold cyan]  📋 List All Tools"
         menu_content += "\n\n[dim]─────────────────────────────────────────[/dim]"
-        menu_content += "\n  [bold magenta]7[/bold magenta]  💻 Custom Command"
-        menu_content += "\n  [bold cyan]8[/bold cyan]  ⚙️  Settings & Configuration"
-        menu_content += "\n  [bold cyan]9[/bold cyan]  📊 View Results"
-        menu_content += "\n  [bold green]10[/bold green] 🏥 Health Check"
+        menu_content += "\n  [bold cyan]7[/bold cyan]  📋 List All Tools"
+        menu_content += "\n  [bold magenta]8[/bold magenta]  💻 Custom Command"
+        menu_content += "\n  [bold cyan]9[/bold cyan]  ⚙️  Settings & Configuration"
+        menu_content += "\n  [bold cyan]10[/bold cyan] 📊 View Results"
+        menu_content += "\n  [bold green]11[/bold green] 🏥 Health Check"
+        menu_content += "\n  [bold yellow]12[/bold yellow] ❓ Help & About"
         menu_content += "\n  [bold cyan]0[/bold cyan]  🚪 Exit"
         
         console.print(Panel(menu_content, title="[bold white]MAIN MENU[/bold white]", border_style="cyan", padding=(1, 2)))
@@ -1345,13 +1380,10 @@ nuclei -update-templates
                     console.print("\n[green]amaoto kullandigin icin tesekkurler![/green]")
                     break
                 
-                elif choice == "6":
+                elif choice == "7":
                     self._list_all_tools_flat()
                 
-                elif choice == "10":
-                    self.check_dependencies()
-                
-                elif choice == "7":
+                elif choice == "8":
                     # ozel komut
                     console.print("\n[bold magenta]═══ Custom Command ═══[/bold magenta]\n")
                     console.print("[dim]Type any shell command to execute[/dim]\n")
@@ -1360,11 +1392,17 @@ nuclei -update-templates
                         if Confirm.ask(f"Execute: [cyan]{cmd}[/cyan]?"):
                             self._execute_command(cmd, "Custom")
                 
-                elif choice == "8":
+                elif choice == "9":
                     self.show_settings()
                 
-                elif choice == "9":
+                elif choice == "10":
                     self.view_results()
+                
+                elif choice == "11":
+                    self.check_dependencies()
+                
+                elif choice == "12":
+                    self._show_help()
                 
                 elif choice.isdigit() and 1 <= int(choice) <= len(options):
                     category_key = options[int(choice) - 1]
