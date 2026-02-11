@@ -499,14 +499,16 @@ class CyberToolkit:
                     "nmap": {
                         "name": "Nmap",
                         "cmd": "nmap",
-                        "description": "Network scanner and security auditor",
-                        "example": "nmap -sV -sC target.com"
+                        "description": "Network mapper & basic scanner",
+                        "prompt": "Enter Target IP/CIDR",
+                        "example": "nmap -sV -sC -O -T4 target.com"
                     },
                     "masscan": {
                         "name": "Masscan",
                         "cmd": "masscan",
-                        "description": "Fast TCP port scanner",
-                        "example": "masscan -p1-65535 target.com --rate=1000"
+                        "description": "Mass Internet scanner (fast)",
+                        "prompt": "Enter Target IP/CIDR",
+                        "example": "masscan -p1-65535 10.0.0.0/8 --rate=1000"
                     },
                     "subfinder": {
                         "name": "Subfinder",
@@ -529,23 +531,23 @@ class CyberToolkit:
                     "ffuf": {
                         "name": "FFUF",
                         "cmd": "ffuf",
-                        "description": "Fast web fuzzer",
-                        "prompt": "Enter URL",
+                        "description": "Fast web fuzzer (requires wordlist)",
+                        "prompt": "Enter URL (use FUZZ keyword)",
                         "example": "ffuf -w wordlist.txt -u http://target.com/FUZZ"
                     },
                     "nuclei": {
                         "name": "Nuclei",
                         "cmd": "nuclei",
-                        "description": "Vulnerability scanner with templates",
-                        "prompt": "Enter URL",
-                        "example": "nuclei -u target.com"
+                        "description": "Template-based vulnerability scanner",
+                        "prompt": "Enter Target URL",
+                        "example": "nuclei -u http://target.com"
                     },
                     "sqlmap": {
                         "name": "SQLmap",
                         "cmd": "sqlmap",
-                        "description": "Automatic SQL injection tool",
-                        "prompt": "Enter URL",
-                        "example": "sqlmap -u 'http://target.com/page?id=1'"
+                        "description": "Automated SQL injection tool",
+                        "prompt": "Enter URL (with parameters)",
+                        "example": "sqlmap -u 'http://target.com/page?id=1' --batch --dbs"
                     },
                     "httpx": {
                         "name": "HTTPx",
@@ -557,16 +559,16 @@ class CyberToolkit:
                     "gobuster": {
                         "name": "Gobuster",
                         "cmd": "gobuster",
-                        "description": "Directory/file brute-forcer",
-                        "prompt": "Enter URL",
+                        "description": "Directory/Subdomain brute-forcer",
+                        "prompt": "Enter URL (requires 'dir' or 'dns' mode)",
                         "example": "gobuster dir -u http://target.com -w wordlist.txt"
                     },
                     "nikto": {
                         "name": "Nikto",
                         "cmd": "nikto",
-                        "description": "Web server scanner",
-                        "prompt": "Enter URL",
-                        "example": "nikto -h target.com"
+                        "description": "Web server vulnerability scanner",
+                        "prompt": "Enter Base URL",
+                        "example": "nikto -h http://target.com"
                     }
                 }
             },
@@ -586,14 +588,14 @@ class CyberToolkit:
                         "cmd": "tshark",
                         "description": "Network protocol analyzer (CLI)",
                         "prompt": "Enter Interface",
-                        "example": "tshark -i eth0"
+                        "example": "tshark -i eth0 -w capture.pcap"
                     },
                     "tcpdump": {
                         "name": "Tcpdump",
                         "cmd": "tcpdump",
                         "description": "Packet analyzer",
                         "prompt": "Enter Interface",
-                        "example": "tcpdump -i eth0"
+                        "example": "tcpdump -i eth0 -w capture.pcap"
                     },
                     "netcat": {
                         "name": "Netcat",
@@ -610,9 +612,9 @@ class CyberToolkit:
                     "hashcat": {
                         "name": "Hashcat",
                         "cmd": "hashcat",
-                        "description": "Advanced password recovery",
-                        "prompt": "Enter hash file",
-                        "example": "hashcat -m 0 hash.txt wordlist.txt"
+                        "description": "Advanced password recovery (GPU)",
+                        "prompt": "Enter Hash File",
+                        "example": "hashcat -m 0 -a 0 hash.txt wordlist.txt"
                     },
                     "john": {
                         "name": "John the Ripper",
@@ -655,9 +657,9 @@ class CyberToolkit:
                     "aircrack-ng": {
                         "name": "Aircrack-ng",
                         "cmd": "aircrack-ng",
-                        "description": "Wireless security toolset",
-                        "prompt": "Enter capture file (.cap)",
-                        "example": "aircrack-ng capture.cap"
+                        "description": "WEP/WPA key cracker",
+                        "prompt": "Enter Capture File (.cap)",
+                        "example": "aircrack-ng -w wordlist.txt -b <BSSID> capture.cap"
                     },
                     "airmon-ng": {
                         "name": "Airmon-ng",
@@ -669,16 +671,16 @@ class CyberToolkit:
                     "airodump-ng": {
                         "name": "Airodump-ng",
                         "cmd": "airodump-ng",
-                        "description": "Packet capture for aircrack",
-                        "prompt": "Enter Interface",
-                        "example": "airodump-ng wlan0mon"
+                        "description": "Packet capture & monitoring",
+                        "prompt": "Enter Monitor Interface",
+                        "example": "airodump-ng wlan0mon --bssid <BSSID> -c <CH> -w capture"
                     },
                     "aireplay-ng": {
                         "name": "Aireplay-ng",
                         "cmd": "aireplay-ng",
-                        "description": "Packet injection tool",
-                        "prompt": "Enter Interface",
-                        "example": "aireplay-ng -0 5 -a BSSID wlan0mon"
+                        "description": "Packet injection & deauth",
+                        "prompt": "Enter Monitor Interface",
+                        "example": "aireplay-ng --deauth 5 -a <BSSID> wlan0mon"
                     },
                     "reaver": {
                         "name": "Reaver",
