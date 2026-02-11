@@ -12,6 +12,9 @@ from typing import Any, Callable, Dict, List, Optional, Union
 from datetime import datetime
 from enum import Enum
 
+from parsers.base import ScanResult
+
+from .enterprise import AuditAction, AuditLogger
 from .utils import format_timestamp, sanitize_filename
 
 
@@ -122,13 +125,14 @@ class Workflow:
 class WorkflowEngine:
     """Executes workflows with tool chaining."""
     
-    def __init__(self, results_dir: Optional[Path] = None):
+    def __init__(self, results_dir: Optional[Path] = None, audit: Optional[AuditLogger] = None):
         self.results_dir = results_dir or Path(__file__).parent.parent / "results"
         self.results_dir.mkdir(exist_ok=True)
         
         self.current_workflow: Optional[Workflow] = None
         self.step_outputs: Dict[str, str] = {}  # step_name -> output_file
         self.callbacks: Dict[str, Callable] = {}
+        self.audit = audit
     
     def register_callback(self, event: str, callback: Callable):
         """Register a callback for workflow events."""
@@ -182,6 +186,16 @@ class WorkflowEngine:
         if not self.check_tool(step.tool):
             step.status = StepStatus.FAILED
             step.error = f"Tool not found: {step.tool}"
+            if self.audit:
+                self.audit.log(
+                    AuditAction.ERROR,
+                    user_id="workflow",
+                    username="workflow",
+                    resource_type="workflow_step",
+                    resource_id=step.name,
+                    details={"tool": step.tool, "error": step.error},
+                    success=False
+                )
             return False
         
         # Check condition
@@ -193,6 +207,17 @@ class WorkflowEngine:
         step.status = StepStatus.RUNNING
         step.started_at = datetime.now()
         self._emit('step_start', step)
+
+        if self.audit:
+            self.audit.log(
+                AuditAction.SCAN_START,
+                user_id="workflow",
+                username="workflow",
+                resource_type="workflow_step",
+                resource_id=step.name,
+                details={"tool": step.tool, "flags": step.flags},
+                success=True
+            )
         
         # Resolve variables in flags
         flags = self._resolve_variable(step.flags, variables)
@@ -238,17 +263,49 @@ class WorkflowEngine:
             step.completed_at = datetime.now()
             self.step_outputs[step.name] = output_file
             self._emit('step_complete', step)
+
+            if self.audit:
+                self.audit.log(
+                    AuditAction.SCAN_COMPLETE,
+                    user_id="workflow",
+                    username="workflow",
+                    resource_type="workflow_step",
+                    resource_id=step.name,
+                    details={"tool": step.tool, "output": output_file, "status": step.status.value},
+                    success=True
+                )
+
             return True
             
         except subprocess.TimeoutExpired:
             step.status = StepStatus.FAILED
             step.error = "Timeout expired"
             self._emit('step_failed', step)
+            if self.audit:
+                self.audit.log(
+                    AuditAction.ERROR,
+                    user_id="workflow",
+                    username="workflow",
+                    resource_type="workflow_step",
+                    resource_id=step.name,
+                    details={"tool": step.tool, "error": step.error},
+                    success=False
+                )
             return False
         except Exception as e:
             step.status = StepStatus.FAILED
             step.error = str(e)
             self._emit('step_failed', step)
+            if self.audit:
+                self.audit.log(
+                    AuditAction.ERROR,
+                    user_id="workflow",
+                    username="workflow",
+                    resource_type="workflow_step",
+                    resource_id=step.name,
+                    details={"tool": step.tool, "error": step.error},
+                    success=False
+                )
             return False
     
     def execute(self, workflow: Workflow, target: str) -> Dict[str, Any]:
@@ -265,8 +322,12 @@ class WorkflowEngine:
         self.current_workflow = workflow
         self.step_outputs = {}
         
-        # Set target as variable
-        variables = {**workflow.variables, 'TARGET': target}
+        # Set target and results path as variables
+        variables = {
+            **workflow.variables,
+            'TARGET': target,
+            'RESULTS': str(self.results_dir)
+        }
         
         results = {
             'workflow': workflow.name,
@@ -289,17 +350,49 @@ class WorkflowEngine:
                 'error': step.error
             })
             
-            if not success and step.status == StepStatus.FAILED:
-                # Stop on failure (could make configurable)
-                results['status'] = 'failed'
-                break
-        else:
-            results['status'] = 'completed'
-        
-        results['completed_at'] = datetime.now().isoformat()
-        self._emit('workflow_complete', results)
-        
-        return results
+        if not success and step.status == StepStatus.FAILED:
+            # Stop on failure (could make configurable)
+            results['status'] = 'failed'
+            break
+    else:
+        results['status'] = 'completed'
+    
+    results['completed_at'] = datetime.now().isoformat()
+
+    duration_seconds = (
+        datetime.fromisoformat(results['completed_at']) - 
+        datetime.fromisoformat(results['started_at'])
+    ).total_seconds()
+    
+    scan_result = ScanResult(
+        tool=workflow.name,
+        target=target,
+        status=results['status'],
+        duration_seconds=duration_seconds
+    )
+    scan_result.metadata['steps'] = results['steps']
+    results['duration_seconds'] = duration_seconds
+    results['scan_summary'] = scan_result.summary()
+
+    if self.audit:
+        self.audit.log(
+            AuditAction.SCAN_COMPLETE,
+            user_id="workflow",
+            username="workflow",
+            resource_type="workflow",
+            resource_id=workflow.name,
+            details={
+                "target": target,
+                "status": results['status'],
+                "steps": len(results['steps']),
+                "duration_seconds": duration_seconds
+            },
+            success=(results['status'] == 'completed')
+        )
+
+    self._emit('workflow_complete', results)
+    
+    return results
 
 
 # Pre-defined workflows

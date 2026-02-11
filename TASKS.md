@@ -21,6 +21,11 @@
 - `[x]` Completed
 - `[!]` Blocked
 
+## Notes
+
+- CLI workflows now rely on a shared AppContext so `ProjectManager`, scheduler, and config profiles load consistently, and actions are audited at every step.
+- FastAPI now shares the same context and exposes scheduler job metadata + stats; workflows emit structured summaries and global errors are captured via a JSON handler.
+
 ---
 
 ## 🏗️ Phase 1: Foundation (v1.0) ✅ COMPLETED

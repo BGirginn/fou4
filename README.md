@@ -49,3 +49,9 @@ ilk calistirmada:
 ## lisans
 
 MIT - [BGirginn](https://bgirgin.dev)
+
+## Recent updates
+
+- CLI commands now reuse a shared app context (`ProjectManager`, `ConfigManager`, `SmartScheduler`, `AuditLogger`) so every operation is audited and respects configured presets.
+- The FastAPI backend exposes new scheduler listings (`/api/scheduler/jobs`, `/api/scheduler/stats`), shares the same context, and has a global exception handler that logs errors via the audit trail.
+- Workflows now log each step with `WorkflowEngine` (start/complete/failure) and report a `ScanResult` summary, while global error handling ensures all public actions return structured responses.

@@ -9,16 +9,19 @@ from pathlib import Path
 from typing import List, Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Query
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.project import ProjectManager
-from core.database import ScanStatus, FindingStatus, Severity
+from automation.scheduler import SmartScheduler
+
+from core.app_context import get_app_context
+from core.database import ScanStatus, FindingStatus, Severity, Scan
+from core.enterprise import AuditAction
 from core.integrations import IntegrationManager
 
 
@@ -68,15 +71,19 @@ class CVELookupRequest(BaseModel):
 
 # ==================== App Setup ====================
 
+ctx = get_app_context()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     # Startup
-    app.state.pm = ProjectManager()
-    app.state.integrations = IntegrationManager()
+    app.state.ctx = ctx
+    app.state.pm = ctx.project_manager
+    app.state.integrations = ctx.integrations
+    app.state.scheduler = ctx.scheduler
+    app.state.workflow = ctx.workflow
+    app.state.audit = ctx.audit
     yield
-    # Shutdown
-    app.state.pm.close()
 
 
 app = FastAPI(
@@ -104,6 +111,11 @@ def get_pm() -> ProjectManager:
 def get_integrations() -> IntegrationManager:
     """Dependency to get IntegrationManager."""
     return app.state.integrations
+
+
+def get_scheduler() -> SmartScheduler:
+    """Dependency to get the scheduler."""
+    return app.state.scheduler
 
 
 # ==================== Health & Info ====================
@@ -307,6 +319,16 @@ async def create_scan(
     
     # TODO: Start scan in background
     # background_tasks.add_task(run_scan, new_scan.id)
+    ctx.audit.log(
+        AuditAction.SCAN_START,
+        resource_type="scan",
+        resource_id=str(new_scan.id),
+        details={
+            "project": project_id,
+            "tool": new_scan.tool,
+            "target_id": new_scan.target_id
+        }
+    )
     
     return new_scan.to_dict()
 
@@ -317,11 +339,10 @@ async def get_scan(
     pm: ProjectManager = Depends(get_pm)
 ):
     """Get scan details."""
-    # Need to add get_scan method or query directly
-    scans = pm.db.session.query(pm.db.session.query.__self__.query(
-        type(pm.db.session.query(pm.db.session)).__mro__[0]
-    ))
-    raise HTTPException(status_code=501, detail="Not implemented yet")
+    scan = pm.db.session.query(Scan).filter(Scan.id == scan_id).first()
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    return scan.to_dict()
 
 
 # ==================== Findings ====================
@@ -465,6 +486,46 @@ async def save_session(
         state=data.get("state", {})
     )
     return session.to_dict()
+
+
+@app.get("/api/scheduler/jobs")
+async def list_scheduler_jobs(
+    scheduler: SmartScheduler = Depends(get_scheduler)
+):
+    """List configured scheduler jobs."""
+    return [job.to_dict() for job in scheduler.list_jobs()]
+
+
+@app.get("/api/scheduler/stats")
+async def scheduler_stats(
+    scheduler: SmartScheduler = Depends(get_scheduler)
+):
+    """Get scheduler usage statistics."""
+    return scheduler.get_schedule_stats()
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, HTTPException):
+        raise exc
+
+    ctx.audit.log(
+        AuditAction.ERROR,
+        user_id="api",
+        username="api",
+        resource_type="request",
+        resource_id=request.url.path,
+        details={
+            "method": request.method,
+            "error": str(exc)
+        },
+        success=False
+    )
+
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"}
+    )
 
 
 if __name__ == "__main__":
