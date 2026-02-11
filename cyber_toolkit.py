@@ -530,36 +530,42 @@ class CyberToolkit:
                         "name": "FFUF",
                         "cmd": "ffuf",
                         "description": "Fast web fuzzer",
+                        "prompt": "Enter URL",
                         "example": "ffuf -w wordlist.txt -u http://target.com/FUZZ"
                     },
                     "nuclei": {
                         "name": "Nuclei",
                         "cmd": "nuclei",
                         "description": "Vulnerability scanner with templates",
+                        "prompt": "Enter URL",
                         "example": "nuclei -u target.com"
                     },
                     "sqlmap": {
                         "name": "SQLmap",
                         "cmd": "sqlmap",
                         "description": "Automatic SQL injection tool",
+                        "prompt": "Enter URL",
                         "example": "sqlmap -u 'http://target.com/page?id=1'"
                     },
                     "httpx": {
                         "name": "HTTPx",
                         "cmd": "httpx",
                         "description": "Fast HTTP probing toolkit",
+                        "prompt": "Enter URL/File",
                         "example": "httpx -l domains.txt"
                     },
                     "gobuster": {
                         "name": "Gobuster",
                         "cmd": "gobuster",
                         "description": "Directory/file brute-forcer",
+                        "prompt": "Enter URL",
                         "example": "gobuster dir -u http://target.com -w wordlist.txt"
                     },
                     "nikto": {
                         "name": "Nikto",
                         "cmd": "nikto",
                         "description": "Web server scanner",
+                        "prompt": "Enter URL",
                         "example": "nikto -h target.com"
                     }
                 }
@@ -572,18 +578,21 @@ class CyberToolkit:
                         "name": "Wireshark",
                         "cmd": "wireshark",
                         "description": "Network protocol analyzer (GUI)",
+                        "prompt": "Enter Interface (or leave empty)",
                         "example": "wireshark"
                     },
                     "tshark": {
                         "name": "TShark",
                         "cmd": "tshark",
                         "description": "Network protocol analyzer (CLI)",
+                        "prompt": "Enter Interface",
                         "example": "tshark -i eth0"
                     },
                     "tcpdump": {
                         "name": "Tcpdump",
                         "cmd": "tcpdump",
                         "description": "Packet analyzer",
+                        "prompt": "Enter Interface",
                         "example": "tcpdump -i eth0"
                     },
                     "netcat": {
@@ -602,18 +611,21 @@ class CyberToolkit:
                         "name": "Hashcat",
                         "cmd": "hashcat",
                         "description": "Advanced password recovery",
+                        "prompt": "Enter hash file",
                         "example": "hashcat -m 0 hash.txt wordlist.txt"
                     },
                     "john": {
                         "name": "John the Ripper",
                         "cmd": "john",
                         "description": "Password cracker",
+                        "prompt": "Enter hash file",
                         "example": "john --wordlist=wordlist.txt hash.txt"
                     },
                     "hydra": {
                         "name": "Hydra",
                         "cmd": "hydra",
                         "description": "Online password cracker",
+                        "prompt": "Enter target service",
                         "example": "hydra -l admin -P wordlist.txt target.com ssh"
                     },
                     "medusa": {
@@ -644,36 +656,42 @@ class CyberToolkit:
                         "name": "Aircrack-ng",
                         "cmd": "aircrack-ng",
                         "description": "Wireless security toolset",
+                        "prompt": "Enter capture file (.cap)",
                         "example": "aircrack-ng capture.cap"
                     },
                     "airmon-ng": {
                         "name": "Airmon-ng",
                         "cmd": "airmon-ng",
                         "description": "Monitor mode enabler",
+                        "prompt": "Enter Interface",
                         "example": "airmon-ng start wlan0"
                     },
                     "airodump-ng": {
                         "name": "Airodump-ng",
                         "cmd": "airodump-ng",
                         "description": "Packet capture for aircrack",
+                        "prompt": "Enter Interface",
                         "example": "airodump-ng wlan0mon"
                     },
                     "aireplay-ng": {
                         "name": "Aireplay-ng",
                         "cmd": "aireplay-ng",
                         "description": "Packet injection tool",
+                        "prompt": "Enter Interface",
                         "example": "aireplay-ng -0 5 -a BSSID wlan0mon"
                     },
                     "reaver": {
                         "name": "Reaver",
                         "cmd": "reaver",
                         "description": "WPS brute-force attack",
+                        "prompt": "Enter Interface",
                         "example": "reaver -i wlan0mon -b BSSID"
                     },
                     "wifite": {
                         "name": "Wifite",
                         "cmd": "wifite",
                         "description": "Automated wireless auditor",
+                        "prompt": "Enter Interface (or leave empty)",
                         "example": "wifite"
                     }
                 }
@@ -1015,14 +1033,20 @@ When running a tool, you can choose:
             return
         elif choice == "1":
             # hizli tarama - sadece hedef
-            target = Prompt.ask("Enter target")
+            hint = tool_info.get("prompt", "Enter target")
+            default_val = self.current_target if "Interface" not in hint else ""
+            
+            target = Prompt.ask(hint, default=default_val)
             if target:
                 cmd = f"{tool_info['cmd']} {target}"
                 if Confirm.ask(f"Execute: [cyan]{cmd}[/cyan]?"):
                     self._execute_command(cmd, tool_info["name"])
         elif choice == "2":
             # ozel bayraklar + hedef
-            target = Prompt.ask("Enter target")
+            hint = tool_info.get("prompt", "Enter target")
+            default_val = self.current_target if "Interface" not in hint else ""
+            
+            target = Prompt.ask(hint, default=default_val)
             if target:
                 flags = Prompt.ask("Enter flags", default="-sV -T4" if tool_info['cmd'] == 'nmap' else "")
                 cmd = f"{tool_info['cmd']} {flags} {target}".strip()
