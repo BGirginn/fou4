@@ -152,6 +152,74 @@ def get_package_manager() -> str:
     return pkgmgr
 
 
+def show_progress(current, total, name, status=""):
+    """Show progress bar"""
+    bar_len = 30
+    filled = int(bar_len * current / total) if total > 0 else 0
+    bar = "#" * filled + "-" * (bar_len - filled)
+    pct = int(100 * current / total) if total > 0 else 0
+    line = f"\r   [{bar}] {pct:3d}% ({current}/{total}) {name[:20]:<20} {status}"
+    print(f"\r{' ' * 100}", end="", flush=True)
+    print(line, end="", flush=True)
+
+
+def run_and_stream(cmd_list, env=None, timeout=300):
+    """Run command and stream output.
+    Returns: (returncode, elapsed_seconds, output_lines_count, last_lines)
+    """
+    proc = subprocess.Popen(
+        cmd_list,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env=env,
+        text=True,
+        bufsize=1
+    )
+    
+    line_count = 0
+    last_lines = []
+    
+    try:
+        start = time.time()
+        while True:
+            # timeout checking
+            elapsed = time.time() - start
+            if elapsed > timeout:
+                proc.kill()
+                proc.wait()
+                return (-999, elapsed, line_count, last_lines)
+            
+            # read output
+            line = proc.stdout.readline()
+            if not line and proc.poll() is not None:
+                break
+            if line:
+                clean = line.strip()
+                if clean:
+                    line_count += 1
+                    
+                    # keep last 20 lines for error context
+                    last_lines.append(clean)
+                    if len(last_lines) > 20:
+                        last_lines.pop(0)
+                        
+                    elapsed = time.time() - start
+                    mins, secs = divmod(int(elapsed), 60)
+                    timer = f"{mins}:{secs:02d}"
+                    # show line indented
+                    display = clean[:70]
+                    print(f"      │ [{timer}] {display}", flush=True)
+        
+        proc.wait()
+        total_elapsed = time.time() - start
+        return (proc.returncode, total_elapsed, line_count, last_lines)
+    except Exception as e:
+        proc.kill()
+        proc.wait()
+        total_elapsed = time.time() - start
+        rc = proc.returncode if proc.returncode is not None else 1
+        return (rc, total_elapsed, line_count, last_lines)
+
 def auto_install_system_tools():
     """Eksik sistem araclarini tespit edip kur"""
     
@@ -246,64 +314,7 @@ def auto_install_system_tools():
     
     current = 0
     
-    # ilerleme cubugu fonksiyonu (###--- stili)
-    def show_progress(current, total, name, status=""):
-        bar_len = 30
-        filled = int(bar_len * current / total) if total > 0 else 0
-        bar = "#" * filled + "-" * (bar_len - filled)
-        pct = int(100 * current / total) if total > 0 else 0
-        line = f"\r   [{bar}] {pct:3d}% ({current}/{total}) {name[:20]:<20} {status}"
-        print(f"\r{' ' * 100}", end="", flush=True)
-        print(line, end="", flush=True)
-    
-    def run_and_stream(cmd_list, env=None, timeout=300):
-        """Komutu calistir, ciktisini anlik olarak goster.
-        Returns: (returncode, elapsed_seconds, output_lines_count)
-        """
-        proc = subprocess.Popen(
-            cmd_list,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            env=env,
-            text=True,
-            bufsize=1
-        )
-        
-        line_count = 0
-        try:
-            start = time.time()
-            while True:
-                # timeout kontrolu
-                elapsed = time.time() - start
-                if elapsed > timeout:
-                    proc.kill()
-                    proc.wait()
-                    return (-999, elapsed, line_count)
-                
-                # cikti oku
-                line = proc.stdout.readline()
-                if not line and proc.poll() is not None:
-                    break
-                if line:
-                    clean = line.strip()
-                    if clean:
-                        line_count += 1
-                        elapsed = time.time() - start
-                        mins, secs = divmod(int(elapsed), 60)
-                        timer = f"{mins}:{secs:02d}"
-                        # satiri girintili goster
-                        display = clean[:70]
-                        print(f"      │ [{timer}] {display}", flush=True)
-            
-            proc.wait()
-            total_elapsed = time.time() - start
-            return (proc.returncode, total_elapsed, line_count)
-        except Exception:
-            proc.kill()
-            proc.wait()
-            total_elapsed = time.time() - start
-            rc = proc.returncode if proc.returncode is not None else 1
-            return (rc, total_elapsed, line_count)
+
     
     # sistem paketlerini kur
     if missing_pkgs:
@@ -317,12 +328,12 @@ def auto_install_system_tools():
                 
                 try:
                     if pkgmgr == "apt":
-                        returncode, elapsed_s, _ = run_and_stream(
+                        returncode, elapsed_s, _, last_log = run_and_stream(
                             sudo_prefix + ["apt-get", "install", "-y", pkg],
                             env=noninteractive_env, timeout=300
                         )
                     else:
-                        returncode, elapsed_s, _ = run_and_stream(
+                        returncode, elapsed_s, _, last_log = run_and_stream(
                             sudo_prefix + ["pacman", "-S", "--noconfirm", "--needed", pkg],
                             timeout=300
                         )
@@ -353,6 +364,10 @@ def auto_install_system_tools():
                     else:
                         status = "❌"
                         print(f"      └ hata (kod: {returncode}, {int(elapsed_s)}s)", flush=True)
+                        if last_log:
+                            print("        Error log:", flush=True)
+                            for line in last_log[-5:]:
+                                print(f"        > {line}", flush=True)
                 
                 except Exception as e:
                     status = "❌"
@@ -385,7 +400,7 @@ def auto_install_system_tools():
                     print()
                     
                     try:
-                        returncode, elapsed_s, _ = run_and_stream(
+                        returncode, elapsed_s, _, last_log = run_and_stream(
                             [go_bin, "install", url],
                             env=os.environ, timeout=300
                         )
@@ -400,6 +415,10 @@ def auto_install_system_tools():
                         else:
                             status = "❌"
                             print(f"      └ hata (kod: {returncode}, {elapsed_str})", flush=True)
+                            if last_log:
+                                print("        Error log:", flush=True)
+                                for line in last_log[-5:]:
+                                    print(f"        > {line}", flush=True)
                     
                     except Exception as e:
                         status = "❌"
@@ -812,6 +831,67 @@ class CyberToolkit:
                 all_tools.append((tool_name, tool_info))
         return all_tools
     
+    def _list_all_tools_flat(self):
+        """Tum araclari kategorisiz duz liste halinde goster"""
+        all_tools = self._get_all_tools()
+        all_tools.sort(key=lambda x: x[0])
+        
+        console.print("\n[bold]All Tools List:[/bold]\n")
+        
+        table = Table(box=box.ROUNDED)
+        table.add_column("Tool", style="bold white")
+        table.add_column("Category", style="cyan")
+        table.add_column("Description", style="dim")
+        table.add_column("Status", width=10)
+        
+        for tool_name, tool_info in all_tools:
+            # kategori bul
+            cat_name = "Unknown"
+            for cat in self.tools.values():
+                if tool_name in cat["tools"]:
+                    cat_name = cat["name"]
+                    break
+            
+            is_installed = self.check_tool_installed(tool_info["cmd"])
+            status = "[green]✓ Ready[/green]" if is_installed else "[red]✗ Missing[/red]"
+            
+            table.add_row(tool_info["name"], cat_name, tool_info["description"], status)
+        
+        console.print(table)
+        console.print(f"\n[dim]Total: {len(all_tools)} tools[/dim]")
+        
+        # arama opsiyonu
+        search = Prompt.ask("\nSearch tool (or Enter to back)", default="")
+        if search:
+            self._search_tool(search)
+        else:
+            return
+
+    def _search_tool(self, query: str):
+        """Arac ara"""
+        all_tools = self._get_all_tools()
+        results = []
+        for name, info in all_tools:
+            if query.lower() in name.lower() or query.lower() in info["description"].lower():
+                results.append((name, info))
+        
+        if not results:
+            console.print(f"\n[yellow]No tools found for '{query}'[/yellow]")
+            input("\nPress Enter to continue...")
+            return
+            
+        console.print(f"\n[bold]Search Results for '{query}':[/bold]\n")
+        
+        for idx, (name, info) in enumerate(results, 1):
+             is_installed = self.check_tool_installed(info["cmd"])
+             status = "[green]✓[/green]" if is_installed else "[red]✗[/red]"
+             console.print(f"[{idx}] {info['name']} ({status}) - {info['description']}")
+        
+        choice = Prompt.ask("\nSelect tool to run (or 0 to back)", default="0")
+        if choice.isdigit() and 1 <= int(choice) <= len(results):
+             name, info = results[int(choice)-1]
+             self.run_tool(info, name)
+    
     def check_tool_installed(self, cmd: str) -> bool:
         """Aracin kurulu olup olmadigini kontrol et"""
         return shutil.which(cmd) is not None
@@ -838,10 +918,12 @@ class CyberToolkit:
         
         # menu paneli
         menu_content = "\n".join(menu_rows)
+        menu_content += "\n  [bold cyan]6[/bold cyan]  📋 List All Tools"
         menu_content += "\n\n[dim]─────────────────────────────────────────[/dim]"
         menu_content += "\n  [bold magenta]7[/bold magenta]  💻 Custom Command"
         menu_content += "\n  [bold cyan]8[/bold cyan]  ⚙️  Settings & Configuration"
         menu_content += "\n  [bold cyan]9[/bold cyan]  📊 View Results"
+        menu_content += "\n  [bold green]10[/bold green] 🏥 Health Check"
         menu_content += "\n  [bold cyan]0[/bold cyan]  🚪 Exit"
         
         console.print(Panel(menu_content, title="[bold white]MAIN MENU[/bold white]", border_style="cyan", padding=(1, 2)))
@@ -1064,14 +1146,7 @@ class CyberToolkit:
         installed = 0
         failed = []
         
-        def show_progress(current, total_count, name, status=""):
-            bar_len = 30
-            filled = int(bar_len * current / total_count) if total_count > 0 else 0
-            bar = "#" * filled + "-" * (bar_len - filled)
-            pct = int(100 * current / total_count) if total_count > 0 else 0
-            line = f"\r   [{bar}] {pct:3d}% ({current}/{total_count}) {name[:20]:<20} {status}"
-            print(f"\r{' ' * 100}", end="", flush=True)
-            print(line, end="", flush=True)
+
         
         try:
             if pkgmgr == "apt":
@@ -1086,12 +1161,12 @@ class CyberToolkit:
                 
                 try:
                     if pkgmgr == "apt":
-                        rc, elapsed_s, _ = run_and_stream(
+                        rc, elapsed_s, _, last_log = run_and_stream(
                             sudo_prefix + ["apt-get", "install", "--reinstall", "-y", "-qq", pkg],
                             env=noninteractive_env, timeout=300
                         )
                     else:
-                        rc, elapsed_s, _ = run_and_stream(
+                        rc, elapsed_s, _, last_log = run_and_stream(
                             sudo_prefix + ["pacman", "-S", "--noconfirm", pkg],
                             timeout=300
                         )
@@ -1102,9 +1177,17 @@ class CyberToolkit:
                     elif rc == -999:
                         show_progress(i, total, pkg, f"⏱️ timeout ({int(elapsed_s)}s)")
                         failed.append(pkg)
+                        if last_log:
+                            print("\n        Error log:", flush=True)
+                            for line in last_log[-5:]:
+                                print(f"        > {line}", flush=True)
                     else:
                         show_progress(i, total, pkg, "❌")
                         failed.append(pkg)
+                        if last_log:
+                            print("\n        Error log:", flush=True)
+                            for line in last_log[-5:]:
+                                print(f"        > {line}", flush=True)
                     print()
                 except Exception as e:
                     show_progress(i, total, pkg, "❌")
@@ -1261,6 +1344,12 @@ nuclei -update-templates
                 if choice == "0":
                     console.print("\n[green]amaoto kullandigin icin tesekkurler![/green]")
                     break
+                
+                elif choice == "6":
+                    self._list_all_tools_flat()
+                
+                elif choice == "10":
+                    self.check_dependencies()
                 
                 elif choice == "7":
                     # ozel komut
