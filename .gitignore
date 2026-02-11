@@ -1,3 +1,31 @@
-*.pyc
+# Python
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Environment
+.env
+
+# Database
+workspace.db
+*.sqlite3
+
+# Logs and Results
+logs/
+results/
+*.log
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# System
 .DS_Store

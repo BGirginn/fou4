@@ -132,7 +132,7 @@ class Scan(Base):
     completed_at = Column(DateTime, nullable=True)
     duration_seconds = Column(Float, default=0.0)
     error_message = Column(Text, default="")
-    metadata = Column(JSON, default=dict)
+    extra_data = Column(JSON, default=dict)
     
     # Relationships
     project = relationship("Project", back_populates="scans")
@@ -154,7 +154,8 @@ class Scan(Base):
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "duration_seconds": self.duration_seconds,
-            "finding_count": len(self.findings) if self.findings else 0
+            "finding_count": len(self.findings) if self.findings else 0,
+            "extra_data": self.extra_data
         }
 
 
@@ -173,7 +174,7 @@ class Finding(Base):
     remediation = Column(Text, default="")
     references = Column(JSON, default=list)
     tags = Column(JSON, default=list)
-    metadata = Column(JSON, default=dict)
+    extra_data = Column(JSON, default=dict)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
@@ -196,7 +197,7 @@ class Finding(Base):
             "remediation": self.remediation,
             "references": self.references,
             "tags": self.tags,
-            "metadata": self.metadata,
+            "extra_data": self.extra_data,
             "created_at": self.created_at.isoformat() if self.created_at else None
         }
 

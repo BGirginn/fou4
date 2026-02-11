@@ -287,7 +287,7 @@ class ProjectManager:
             remediation=remediation,
             references=references or [],
             tags=tags or [],
-            metadata=metadata or {}
+            extra_data=metadata or {}
         )
         self.db.session.add(finding)
         self.db.commit()
