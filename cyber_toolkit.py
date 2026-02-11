@@ -257,7 +257,9 @@ def auto_install_system_tools():
         print(line, end="", flush=True)
     
     def run_and_stream(cmd_list, env=None, timeout=300):
-        """Komutu calistir, ciktisini anlik olarak goster. returncode dondurur."""
+        """Komutu calistir, ciktisini anlik olarak goster.
+        Returns: (returncode, elapsed_seconds, output_lines_count)
+        """
         proc = subprocess.Popen(
             cmd_list,
             stdout=subprocess.PIPE,
@@ -267,6 +269,7 @@ def auto_install_system_tools():
             bufsize=1
         )
         
+        line_count = 0
         try:
             start = time.time()
             while True:
@@ -275,7 +278,7 @@ def auto_install_system_tools():
                 if elapsed > timeout:
                     proc.kill()
                     proc.wait()
-                    return -999  # timeout kodu
+                    return (-999, elapsed, line_count)
                 
                 # cikti oku
                 line = proc.stdout.readline()
@@ -284,16 +287,23 @@ def auto_install_system_tools():
                 if line:
                     clean = line.strip()
                     if clean:
+                        line_count += 1
+                        elapsed = time.time() - start
+                        mins, secs = divmod(int(elapsed), 60)
+                        timer = f"{mins}:{secs:02d}"
                         # satiri girintili goster
-                        display = clean[:80]  # max 80 karakter
-                        print(f"      │ {display}", flush=True)
+                        display = clean[:70]
+                        print(f"      │ [{timer}] {display}", flush=True)
             
             proc.wait()
-            return proc.returncode
+            total_elapsed = time.time() - start
+            return (proc.returncode, total_elapsed, line_count)
         except Exception:
             proc.kill()
             proc.wait()
-            return proc.returncode if proc.returncode is not None else 1
+            total_elapsed = time.time() - start
+            rc = proc.returncode if proc.returncode is not None else 1
+            return (rc, total_elapsed, line_count)
     
     # sistem paketlerini kur
     if missing_pkgs:
@@ -307,19 +317,19 @@ def auto_install_system_tools():
                 
                 try:
                     if pkgmgr == "apt":
-                        returncode = run_and_stream(
+                        returncode, elapsed_s, _ = run_and_stream(
                             sudo_prefix + ["apt-get", "install", "-y", pkg],
                             env=noninteractive_env, timeout=300
                         )
                     else:
-                        returncode = run_and_stream(
+                        returncode, elapsed_s, _ = run_and_stream(
                             sudo_prefix + ["pacman", "-S", "--noconfirm", "--needed", pkg],
                             timeout=300
                         )
                     
                     if returncode == -999:
                         status = "⏱️"
-                        print(f"      └ zaman asimi (>5dk), atlandi", flush=True)
+                        print(f"      └ zaman asimi (>{int(elapsed_s)}s), atlandi", flush=True)
                     elif returncode == 0:
                         # boyut bilgisi
                         size_info = ""
@@ -332,16 +342,17 @@ def auto_install_system_tools():
                                 try:
                                     kb = int(size_check.stdout.strip())
                                     if kb >= 1024:
-                                        size_info = f" ({kb // 1024} MB)"
+                                        size_info = f", {kb // 1024} MB"
                                     else:
-                                        size_info = f" ({kb} KB)"
+                                        size_info = f", {kb} KB"
                                 except ValueError:
                                     pass
+                        elapsed_str = f"{int(elapsed_s)}s"
                         status = "✅"
-                        print(f"      └ tamamlandi{size_info}", flush=True)
+                        print(f"      └ tamamlandi ({elapsed_str}{size_info})", flush=True)
                     else:
                         status = "❌"
-                        print(f"      └ hata (kod: {returncode})", flush=True)
+                        print(f"      └ hata (kod: {returncode}, {int(elapsed_s)}s)", flush=True)
                 
                 except Exception as e:
                     status = "❌"
@@ -374,20 +385,21 @@ def auto_install_system_tools():
                     print()
                     
                     try:
-                        returncode = run_and_stream(
+                        returncode, elapsed_s, _ = run_and_stream(
                             [go_bin, "install", url],
                             env=os.environ, timeout=300
                         )
                         
+                        elapsed_str = f"{int(elapsed_s)}s"
                         if returncode == -999:
                             status = "⏱️"
-                            print(f"      └ zaman asimi (>5dk), atlandi", flush=True)
+                            print(f"      └ zaman asimi (>{elapsed_str}), atlandi", flush=True)
                         elif returncode == 0:
                             status = "✅"
-                            print(f"      └ tamamlandi", flush=True)
+                            print(f"      └ tamamlandi ({elapsed_str})", flush=True)
                         else:
                             status = "❌"
-                            print(f"      └ hata (kod: {returncode})", flush=True)
+                            print(f"      └ hata (kod: {returncode}, {elapsed_str})", flush=True)
                     
                     except Exception as e:
                         status = "❌"
@@ -1074,21 +1086,21 @@ class CyberToolkit:
                 
                 try:
                     if pkgmgr == "apt":
-                        rc = run_and_stream(
+                        rc, elapsed_s, _ = run_and_stream(
                             sudo_prefix + ["apt-get", "install", "--reinstall", "-y", "-qq", pkg],
                             env=noninteractive_env, timeout=300
                         )
                     else:
-                        rc = run_and_stream(
+                        rc, elapsed_s, _ = run_and_stream(
                             sudo_prefix + ["pacman", "-S", "--noconfirm", pkg],
                             timeout=300
                         )
                     
                     if rc == 0:
-                        show_progress(i, total, pkg, "✅")
+                        show_progress(i, total, pkg, f"✅ ({int(elapsed_s)}s)")
                         installed += 1
                     elif rc == -999:
-                        show_progress(i, total, pkg, "⏱️ timeout")
+                        show_progress(i, total, pkg, f"⏱️ timeout ({int(elapsed_s)}s)")
                         failed.append(pkg)
                     else:
                         show_progress(i, total, pkg, "❌")
